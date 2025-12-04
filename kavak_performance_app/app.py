@@ -25,6 +25,7 @@ from utils.components import (
     render_kpi_card,
     render_metric_comparison,
 )
+from utils.mobile_styles import apply_mobile_styles
 
 # Import custom modules
 from utils.data_generator import generate_sample_data
@@ -44,6 +45,9 @@ st.set_page_config(
 
 # Apply custom styling
 apply_custom_styles()
+
+# Apply mobile-responsive styles (archivo separado para iterar fácilmente)
+apply_mobile_styles()
 
 # Initialize authentication state
 init_session_state()
