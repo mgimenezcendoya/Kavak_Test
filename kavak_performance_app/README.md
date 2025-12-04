@@ -42,6 +42,18 @@ Construir una aplicación que permita:
 6. **Funnel del Hub**: Análisis detallado del funnel de conversión
 7. **Alertas Operativas**: Agentes con baja conversión, inventario envejecido, no-show alto
 
+### 🤖 Celeste Copilot (NUEVO)
+
+**Asistente inteligente para agentes con:**
+- **Chat interactivo**: Consultas en tiempo real desde el sidebar
+- **Acciones rápidas**:
+  - 🚗 Alternativas de vehículos similares
+  - 💬 Tips de cierre personalizados
+  - 📊 Análisis del perfil del cliente
+  - 💰 Cálculos de financiamiento
+- **Contexto automático**: Respuestas basadas en los datos del cliente activo
+- **Insights proactivos**: Card de "Celeste dice" con recomendaciones
+
 ## 📁 Estructura del Proyecto
 
 ```

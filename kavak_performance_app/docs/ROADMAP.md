@@ -99,6 +99,21 @@ El cliente experimenta **fricción** al pasar de la interacción online con Cele
   - Vehículo favorito y lote
   - Recomendaciones rápidas
 
+- [x] **🆕 Celeste Copilot Interactivo (Mockup)** ✨ NUEVO
+  - Chat widget en sidebar para consultas en tiempo real
+  - Acciones rápidas: Alternativas de autos, Tips de cierre, Análisis del cliente
+  - Respuestas contextuales basadas en datos del cliente:
+    - Alternativas de vehículos similares al favorito
+    - Tips de venta personalizados según objeciones
+    - Análisis completo del perfil del cliente
+    - Información de financiamiento con cálculos
+    - Comparativas de modelos
+    - Estado de inventario
+  - Card de "Celeste dice" con insights rápidos
+  - Integrado en:
+    - Vista de perfil de cliente (sidebar + card)
+    - Dashboard del agente (sidebar contextual)
+
 ---
 
 ## 🚧 FASE 1: NOTIFICACIONES Y PREPARACIÓN (Q1 2025)

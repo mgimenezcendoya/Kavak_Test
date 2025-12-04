@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from config import COLORS, VEHICLE_SEGMENTS
+from utils.celeste_copilot import render_celeste_insights_card
 from utils.components import render_alert_box, render_kpi_card
 
 
@@ -45,6 +46,9 @@ def render_customer_profile(data):
         return
 
     customer_info = customer.iloc[0].to_dict()
+
+    # Store customer context for Celeste Copilot
+    st.session_state.copilot_customer_context = customer_info
 
     # ═══════════════════════════════════════════════════════════════════
     # BACK BUTTON (Compact)
@@ -176,6 +180,10 @@ def render_hero_brief(customer_info):
         for idx, rec in enumerate(recommendations[:3]):
             with cols[idx]:
                 st.success(f"✅ {rec}")
+
+    # Celeste Copilot Quick Insight Card
+    st.markdown("---")
+    render_celeste_insights_card(customer_info)
 
 
 def render_action_bar(customer_info):

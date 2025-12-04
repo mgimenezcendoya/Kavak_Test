@@ -262,6 +262,29 @@ def render_todays_focus(agent_data, data):
                 ):
                     st.toast(f"📍 Ir a Lote {vehicles[0]['lote']}")
 
+        # Celeste Copilot hint
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 16px;
+                background: linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(91, 33, 182, 0.1) 100%);
+                border-radius: 10px;
+                border-left: 4px solid #7C3AED;
+            ">
+                <span style="font-size: 1.5rem;">🤖</span>
+                <div>
+                    <div style="font-weight: 600; color: #5B21B6;">¿Necesitas ayuda con este cliente?</div>
+                    <div style="font-size: 0.85rem; color: #6B7280;">Usa el botón <strong>"Celeste"</strong> abajo a la derecha para consultar alternativas, tips y más.</div>
+                </div>
+            </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
     # Upcoming appointments preview
     st.markdown("---")
     st.caption("**Próximas citas:**")
@@ -317,6 +340,20 @@ def render_agent_selector(data):
         # Filter agents by hub
         hub_agents = agents_df[agents_df["hub"] == selected_hub]["agent_name"].tolist()
         selected_agent = st.selectbox("Tu Nombre", hub_agents, key="kavako_agent")
+
+        # Store customer context for Celeste Copilot (floating widget)
+        customers_df = data.get("customers", pd.DataFrame())
+
+        if len(customers_df) > 0 and selected_agent:
+            # Find agent's hub customers for context
+            agent_row = agents_df[agents_df["agent_name"] == selected_agent]
+            if len(agent_row) > 0:
+                agent_hub = agent_row.iloc[0]["hub"]
+                agent_customers = customers_df[customers_df["hub"] == agent_hub]
+                if len(agent_customers) > 0:
+                    # Use highest score customer as context
+                    top_customer = agent_customers.nlargest(1, "customer_score").iloc[0]
+                    st.session_state.copilot_customer_context = top_customer.to_dict()
 
 
 def apply_agent_operation_filter(agent_dict, operation_type):

@@ -19,6 +19,7 @@ from utils.auth import (
     is_authenticated,
     render_user_info_sidebar,
 )
+from utils.celeste_copilot import render_celeste_copilot
 from utils.components import (
     apply_custom_styles,
     render_alert_box,
@@ -146,3 +147,9 @@ else:
         st.caption(
             f"Última actualización: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
+
+        # ═══════════════════════════════════════════════════════════════════
+        # CELESTE COPILOT - Floating Widget (disponible en todas las vistas)
+        # ═══════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        render_celeste_copilot(position="floating")
