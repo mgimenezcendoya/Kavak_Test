@@ -639,114 +639,67 @@ def render_active_portfolio(agent_data, data):
 
 
 def render_upcoming_appointments(agent_data, data):
-    """Render upcoming appointments calendar linked to real customers"""
+    """Render upcoming appointments calendar using appointments dataframe"""
     st.subheader("📅 Mis Citas Próximas")
 
     # Appointment stats
-    appointments = agent_data.get("appointments", 0)
-    available_slots = agent_data.get("available_slots", 0)
+    appointments_count = agent_data.get("appointments", 0)
     utilization = agent_data.get("utilization", 0) * 100
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.metric("Citas Agendadas", f"{appointments:.0f}")
+        st.metric("Citas Agendadas", f"{appointments_count:.0f}")
 
     with col2:
         st.metric("Utilización Agenda", f"{utilization:.0f}%")
 
-    # Get real customers for this agent
+    # Get appointments dataframe
+    appointments_df = data.get("appointments", pd.DataFrame())
     customers_df = data.get("customers", pd.DataFrame())
 
-    if len(customers_df) == 0:
-        st.warning("No hay datos de clientes disponibles")
+    if len(appointments_df) == 0:
+        st.warning("No hay datos de citas disponibles")
         return
 
-    # Filter customers for this agent's hub
-    agent_customers = customers_df[customers_df["hub"] == agent_data["hub"]]
+    # Filter appointments for this agent's hub and future dates
+    today = datetime.now().date()
+    week_ahead = today + timedelta(days=7)
 
-    # Take random customers as appointments (simulation)
-    num_appointments = min(7, int(appointments), len(agent_customers))
+    hub_appointments = appointments_df[
+        (appointments_df["hub"] == agent_data["hub"])
+        & (appointments_df["date"] >= today)
+        & (appointments_df["date"] <= week_ahead)
+        & (appointments_df["status"].isin(["Confirmada", "Pendiente", "Por Confirmar"]))
+    ].copy()
 
-    if num_appointments == 0:
-        st.info("No tienes citas agendadas en los próximos 7 días")
-        return
+    # Sort by datetime
+    hub_appointments = hub_appointments.sort_values("datetime")
 
-    # Cache appointments to prevent regeneration on rerun
-    # Use agent_id + date as stable key
-    cache_key = (
-        f"appointments_{agent_data['agent_id']}_{datetime.now().strftime('%Y-%m-%d')}"
-    )
-
-    if cache_key not in st.session_state:
-        # Generate appointments only once per day per agent
-        appointments_customers = agent_customers.sample(n=num_appointments)
-        st.session_state[cache_key] = appointments_customers.index.tolist()
-    else:
-        # Retrieve cached appointments
-        cached_indices = st.session_state[cache_key]
-        # Ensure we only use indices that still exist
-        valid_indices = [idx for idx in cached_indices if idx in agent_customers.index]
-        appointments_customers = agent_customers.loc[valid_indices]
-
-    st.markdown("#### Próximas 7 Días")
+    st.markdown("#### Próximos 7 Días")
     st.caption(
         "💡 Revisa el contexto de Celeste antes de cada cita para una mejor atención"
     )
 
-    today = datetime.now()
+    if len(hub_appointments) == 0:
+        st.info("No tienes citas agendadas en los próximos 7 días")
+        return
 
-    # Create appointment data sorted by date
-    appointment_list = []
+    # Show count
+    st.caption(f"**{len(hub_appointments)} citas programadas**")
 
-    # Cache appointment details (date/time/type) to prevent regeneration
-    appt_details_key = (
-        f"appt_details_{agent_data['agent_id']}_{datetime.now().strftime('%Y-%m-%d')}"
-    )
-
-    if appt_details_key not in st.session_state:
-        # Generate appointment details only once
-        appt_details = {}
-        for idx, (_, customer) in enumerate(appointments_customers.iterrows()):
-            customer_id = customer["customer_id"]
-            appt_details[customer_id] = {
-                "date": today + timedelta(days=np.random.randint(0, 7)),
-                "time": f"{np.random.randint(9, 18)}:00",
-                "type": np.random.choice(
-                    [
-                        "Prospecto Nuevo",
-                        "Seguimiento",
-                        "Demo Programada",
-                        "Cierre Esperado",
-                    ]
-                ),
-            }
-        st.session_state[appt_details_key] = appt_details
-    else:
-        appt_details = st.session_state[appt_details_key]
-
-    # Build appointment list using cached details
-    for idx, (_, customer) in enumerate(appointments_customers.iterrows()):
-        customer_id = customer["customer_id"]
-        if customer_id in appt_details:
-            appointment_list.append(
-                {
-                    "idx": idx,
-                    "date": appt_details[customer_id]["date"],
-                    "time": appt_details[customer_id]["time"],
-                    "customer": customer,
-                    "type": appt_details[customer_id]["type"],
-                }
-            )
-
-    # Sort by date
-    appointment_list.sort(key=lambda x: x["date"])
-
-    # Render as compact table with expanders in scrollable container
+    # Render appointments in scrollable container
     with st.container(height=600):
-        for appt in appointment_list:
-            customer = appt["customer"]
+        for idx, (_, appt) in enumerate(hub_appointments.iterrows()):
             date_str = appt["date"].strftime("%d/%m/%Y")
+
+            # Status color
+            status_colors = {
+                "Confirmada": "green",
+                "Pendiente": "orange",
+                "Por Confirmar": "red",
+            }
+            status_color = status_colors.get(appt["status"], "gray")
 
             # Compact header row with key info and button
             col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1.5, 1])
@@ -755,101 +708,70 @@ def render_upcoming_appointments(agent_data, data):
                 st.markdown(f"**{date_str} {appt['time']}**")
 
             with col2:
-                st.markdown(f"**{customer['customer_name']}**")
+                st.markdown(f"**{appt['customer_name']}**")
 
             with col3:
-                st.caption(f"**Tipo:** {appt['type']}")
+                st.caption(f"**{appt['type_icon']} {appt['appointment_type']}**")
 
             with col4:
-                score = customer["customer_score"]
-                score_color = (
-                    "green" if score >= 70 else "orange" if score >= 50 else "red"
-                )
-                st.markdown(f"**Sentinel:** :{score_color}[{score}/100]")
+                st.markdown(f"**Estado:** :{status_color}[{appt['status']}]")
 
             with col5:
-                # Button to view customer and switch to Clientes tab
+                # Button to view customer profile
                 button_clicked = st.button(
                     "👁️ Ver",
-                    key=f"view_cust_{customer['customer_id']}_{appt['idx']}",
+                    key=f"view_appt_{appt['appointment_id']}_{idx}",
                     help="Ver perfil del cliente",
                     use_container_width=True,
                 )
 
-            # Handle button click OUTSIDE the column context
+            # Handle button click
             if button_clicked:
-                # Set the selected customer and navigation view
-                cust_id = customer["customer_id"]
-                st.session_state.selected_customer_id = cust_id
+                st.session_state.selected_customer_id = appt["customer_id"]
                 st.session_state.navigation_view = "customer_profile"
                 st.rerun()
 
-            # Expandable details with Celeste context
-            with st.expander(
-                f"📱 Contexto Celeste - {customer['customer_name']}", expanded=False
-            ):
-                # Celeste summary at top
-                celeste_summary = customer.get("celeste_summary", "")
-                if celeste_summary:
-                    st.info(f"💬 **Resumen:** {celeste_summary}")
-
+            # Expandable details
+            with st.expander(f"📱 Detalles - {appt['customer_name']}", expanded=False):
                 col_detail1, col_detail2 = st.columns(2)
 
                 with col_detail1:
-                    st.markdown("**📋 Datos del Cliente:**")
-                    st.caption(f"• ID: {customer['customer_id']}")
-                    st.caption(f"• Status: {customer['status']}")
-                    st.caption(f"• Compras Previas: {customer['num_sales']}")
-
-                    # Budget and financing
-                    budget = customer.get("celeste_budget_range", "No especificado")
-                    st.caption(f"• Presupuesto: {budget}")
-
-                    financing = customer.get("celeste_financing_interest", {})
-                    if financing and financing.get("interested"):
-                        st.caption(
-                            f"• Financiamiento: {financing.get('months', 0)} meses"
-                        )
+                    st.markdown("**📋 Datos de la Cita:**")
+                    st.caption(f"• ID: {appt['appointment_id']}")
+                    st.caption(f"• Tipo: {appt['appointment_type']}")
+                    st.caption(f"• Duración: {appt['duration_min']} min")
+                    st.caption(f"• Prioridad: {appt['priority']}")
 
                 with col_detail2:
-                    # Favorite vehicle
-                    vehicles = customer.get("celeste_vehicles_shown", [])
-                    if vehicles:
-                        fav = vehicles[0]
-                        st.markdown("**🚗 Vehículo Favorito:**")
-                        st.success(
-                            f"{fav['brand']} {fav['model']} {fav['year']} - "
-                            f"**Lote {fav['lote']}**"
-                        )
-                        st.caption(f"Precio: ${fav['price']:,}")
+                    st.markdown("**🚗 Vehículo de Interés:**")
+                    st.success(f"{appt['vehicle_interest']}")
+                    st.caption(f"Precio: ${appt['vehicle_price']:,.0f}")
 
-                    # Trade-in
-                    tradein = customer.get("celeste_tradein_info")
-                    if tradein:
-                        st.markdown("**🔄 Trade-in:**")
-                        st.caption(
-                            f"{tradein['brand']} {tradein['model']} {tradein['year']} "
-                            f"(~${tradein['estimated_value']:,})"
-                        )
+                # Notes
+                if appt.get("notes"):
+                    st.info(f"📝 **Notas:** {appt['notes']}")
 
-                # Recommendations
-                recommendations = customer.get("celeste_recommendations", [])
-                if recommendations:
-                    st.markdown("---")
-                    st.markdown("**💡 Recomendaciones:**")
-                    for rec in recommendations[:2]:
-                        st.success(f"✅ {rec}")
+                # Try to get customer context from customers_df
+                if len(customers_df) > 0:
+                    customer_match = customers_df[
+                        customers_df["customer_id"] == appt["customer_id"]
+                    ]
+                    if len(customer_match) > 0:
+                        customer = customer_match.iloc[0]
+                        celeste_summary = customer.get("celeste_summary", "")
+                        if celeste_summary:
+                            st.markdown("---")
+                            st.info(f"🤖 **Contexto Celeste:** {celeste_summary}")
 
-                # Objections
-                objections = customer.get("celeste_main_objections", [])
-                if objections:
-                    st.markdown("**⚠️ Dudas del cliente:**")
-                    for obj in objections:
-                        st.warning(f"• {obj}")
+                        recommendations = customer.get("celeste_recommendations", [])
+                        if recommendations:
+                            st.markdown("**💡 Tips:**")
+                            for rec in recommendations[:2]:
+                                st.success(f"✅ {rec}")
 
                 # Contact info
                 st.markdown("---")
-                st.caption(f"📧 {customer['email']} | 📱 {customer['phone']}")
+                st.caption(f"📱 {appt['customer_phone']}")
 
             st.markdown("---")
 

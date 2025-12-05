@@ -232,12 +232,50 @@ REGIONS_HUBS = {
             "HQ Explanada",
         ],
     },
-    "Brasil": {"São Paulo": [], "Río de Janeiro": [], "Brasilia": []},
-    "Argentina": {"Buenos Aires": [], "Córdoba": [], "Rosario": []},
-    "Chile": {"Santiago": [], "Valparaíso": [], "Concepción": []},
+    # Para Brasil, Argentina y Chile: la región = país, los hubs son las ciudades/sucursales
+    "Brasil": {
+        "Brasil": [
+            "Kavak São Paulo - Pinheiros",
+            "Kavak São Paulo - Morumbi",
+            "Kavak São Paulo - Tatuapé",
+            "Kavak São Paulo - Santo André",
+            "Kavak Rio de Janeiro - Barra",
+            "Kavak Rio de Janeiro - Botafogo",
+            "Kavak Rio de Janeiro - Norte Shopping",
+            "Kavak Brasilia - Asa Norte",
+            "Kavak Brasilia - Lago Sul",
+            "Kavak Brasilia - Taguatinga",
+        ],
+    },
+    "Argentina": {
+        "Argentina": [
+            "Kavak Buenos Aires - Palermo",
+            "Kavak Buenos Aires - Belgrano",
+            "Kavak Buenos Aires - Puerto Madero",
+            "Kavak Buenos Aires - Nordelta",
+            "Kavak Córdoba - Nueva Córdoba",
+            "Kavak Córdoba - Cerro de las Rosas",
+            "Kavak Rosario - Centro",
+            "Kavak Rosario - Fisherton",
+        ],
+    },
+    "Chile": {
+        "Chile": [
+            "Kavak Santiago - Las Condes",
+            "Kavak Santiago - Providencia",
+            "Kavak Santiago - La Dehesa",
+            "Kavak Santiago - Vitacura",
+            "Kavak Valparaíso - Viña del Mar",
+            "Kavak Valparaíso - Centro",
+            "Kavak Concepción - Centro",
+            "Kavak Concepción - San Pedro",
+        ],
+    },
 }
 
 # Legacy HUBS structure for backwards compatibility (flat list per country)
+# Para México: son las regiones (que contienen múltiples hubs)
+# Para Brasil/Argentina/Chile: son las ciudades directamente
 HUBS = {
     "México": [
         "Ciudad de México",
@@ -249,13 +287,13 @@ HUBS = {
         "León",
         "San Luis Potosí",
     ],
-    "Brasil": ["São Paulo", "Río de Janeiro", "Brasilia"],
-    "Argentina": ["Buenos Aires", "Córdoba", "Rosario"],
-    "Chile": ["Santiago", "Valparaíso", "Concepción"],
+    "Brasil": ["Brasil"],  # Solo una región = país
+    "Argentina": ["Argentina"],  # Solo una región = país
+    "Chile": ["Chile"],  # Solo una región = país
 }
 
-# Agents per hub (sample)
-AGENTS_PER_HUB = 15
+# Agents per hub (sample) - Increased for better demo
+AGENTS_PER_HUB = 25
 
 # Agents per region (when filtering by region instead of specific hub)
 AGENTS_PER_REGION = 40

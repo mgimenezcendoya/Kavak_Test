@@ -50,6 +50,10 @@ def render_ceo_dashboard(data):
     if hub_filter == "Todos":  # Only show comparison when viewing multiple hubs
         render_hub_comparison_section(filtered_data, country_filter)
 
+    # Performance Table Section (NEW - Collapsible)
+    st.markdown("---")
+    render_performance_table_section(data, country_filter)
+
     # Alerts Section (Dynamic)
     st.markdown("---")
     period_days = PERIOD_OPTIONS[st.session_state.get("ceo_period", "Últimos 30 días")]
@@ -129,7 +133,7 @@ def filter_data(data, country, region, hub, period):
 
 
 def render_kpi_section(filtered_data):
-    """Render KPI cards grouped by category"""
+    """Render KPI cards grouped by category using real unit economics from data"""
     df = filtered_data["daily_metrics"]
 
     if len(df) == 0:
@@ -149,7 +153,7 @@ def render_kpi_section(filtered_data):
     avg_sla = df["sla_lead_to_sale"].mean()
     total_cancellations = df["cancellations"].sum()
 
-    # Calculate inventory metrics for Gross Margin Stock
+    # Calculate inventory metrics
     inventory_df = filtered_data.get("inventory", pd.DataFrame())
     if len(inventory_df) > 0:
         total_inventory = inventory_df["total_inventory"].sum()
@@ -158,49 +162,37 @@ def render_kpi_section(filtered_data):
         total_inventory = 0
         available_inventory = 0
 
-    # Calculate Full Margin (Current) - Margen completo por venta
-    # Based on real data: ~350-1100 USD per sale (Mexico average: 882 USD)
-    # For ticket avg of 10,000-22,000 USD, this represents ~4-8% margin
-    full_margin_rate = np.random.uniform(0.04, 0.08)  # 4-8% of ticket
-    full_margin = avg_ticket * full_margin_rate
+    # Use real unit economics from data (now comes from data_generator with real values)
+    full_margin = df["full_margin"].mean() if "full_margin" in df.columns else 950
+    fin_ins_unit_economic = df["fin_ins"].mean() if "fin_ins" in df.columns else 1200
+    warranty_unit_economic = (
+        df["kt"].mean() if "kt" in df.columns else 150
+    )  # KT = Kavak Trade
 
-    # Gross Margin Stock: revenue potencial de vender los autos / cantidad de autos publicados
+    # PC1 from data or calculate
+    pc1 = (
+        df["pc1"].mean()
+        if "pc1" in df.columns
+        else (full_margin + fin_ins_unit_economic + warranty_unit_economic)
+    )
+
+    # eCAC from data
+    current_ecac = df["ecac"].mean() if "ecac" in df.columns else 350
+
+    # PC1 - eCAC
+    pc1_minus_ecac = (
+        df["pc1_minus_ecac"].mean()
+        if "pc1_minus_ecac" in df.columns
+        else (pc1 - current_ecac)
+    )
+
+    # Gross Margin Stock
     potential_revenue = (
         avg_ticket * available_inventory if available_inventory > 0 else 0
     )
     gross_margin_stock = (
         potential_revenue / available_inventory if available_inventory > 0 else 0
     )
-
-    # Revenue Financing & Insurance (Unit Economics): Revenue per delivery
-    # Based on real data: ~100-1700 USD per sale (Mexico average: 1,738 USD)
-    # For ticket avg of 10,000-22,000 USD, this represents ~8-12% of ticket
-    # Financing: 35-55% attach rate with ~3-5% commission
-    # Insurance: 30-50% attach rate with ~2-4% commission
-    financing_attach_rate = np.random.uniform(0.35, 0.55)
-    financing_commission_rate = np.random.uniform(0.08, 0.14)  # Combined F&I rate
-
-    fin_ins_unit_economic = avg_ticket * financing_commission_rate
-
-    # Unit Economic de Garantías Extendidas (Extended Warranties): Revenue per delivery
-    # Based on real data: ~0-230 USD per sale (Mexico average: 228 USD)
-    # For ticket avg of 10,000-22,000 USD, this represents ~1-2% of ticket
-    # Extended warranties: 40-60% attach rate with low margin
-    warranty_attach_rate = np.random.uniform(0.40, 0.60)
-    warranty_commission_rate = np.random.uniform(0.01, 0.02)  # 1-2% of ticket
-    warranty_unit_economic = avg_ticket * warranty_commission_rate
-
-    # PC1 (Profit Contribution 1): Sum of all unit economics
-    # PC1 = Full Margin + Fin & Ins UE + Warranty UE
-    pc1 = full_margin + fin_ins_unit_economic + warranty_unit_economic
-
-    # Calculate eCAC (effective Customer Acquisition Cost)
-    current_ecac = (
-        (avg_cost_per_lead * total_leads / total_sales) if total_sales > 0 else 0
-    )
-
-    # PC1 - eCAC: Net profit per unit after acquisition costs
-    pc1_minus_ecac = pc1 - current_ecac
 
     # Calculate deltas (compare to previous period)
     prev_period_df = get_previous_period_data(df)
@@ -212,30 +204,38 @@ def render_kpi_section(filtered_data):
         prev_revenue = prev_period_df["revenue"].sum()
         prev_leads = prev_period_df["leads"].sum()
         prev_cost_per_lead = prev_period_df["cost_per_lead"].mean()
-
-        # Financial previous metrics
         prev_avg_ticket = prev_revenue / prev_sales if prev_sales > 0 else 0
 
-        # Calculate previous unit economics with same methodology
-        prev_full_margin_rate = np.random.uniform(0.04, 0.08)
-        prev_full_margin = prev_avg_ticket * prev_full_margin_rate
-
-        prev_financing_commission_rate = np.random.uniform(0.08, 0.14)
-        prev_fin_ins_unit_economic = prev_avg_ticket * prev_financing_commission_rate
-
-        prev_warranty_commission_rate = np.random.uniform(0.01, 0.02)
-        prev_warranty_unit_economic = prev_avg_ticket * prev_warranty_commission_rate
-
+        # Previous unit economics from data
+        prev_full_margin = (
+            prev_period_df["full_margin"].mean()
+            if "full_margin" in prev_period_df.columns
+            else full_margin
+        )
+        prev_fin_ins_unit_economic = (
+            prev_period_df["fin_ins"].mean()
+            if "fin_ins" in prev_period_df.columns
+            else fin_ins_unit_economic
+        )
+        prev_warranty_unit_economic = (
+            prev_period_df["kt"].mean()
+            if "kt" in prev_period_df.columns
+            else warranty_unit_economic
+        )
         prev_pc1 = (
-            prev_full_margin + prev_fin_ins_unit_economic + prev_warranty_unit_economic
+            prev_period_df["pc1"].mean() if "pc1" in prev_period_df.columns else pc1
         )
-
-        # Demand previous metrics
-        prev_conversion = prev_sales / prev_leads if prev_leads > 0 else 0
         prev_ecac = (
-            (prev_cost_per_lead * prev_leads / prev_sales) if prev_sales > 0 else 0
+            prev_period_df["ecac"].mean()
+            if "ecac" in prev_period_df.columns
+            else current_ecac
         )
-        prev_pc1_minus_ecac = prev_pc1 - prev_ecac
+        prev_pc1_minus_ecac = (
+            prev_period_df["pc1_minus_ecac"].mean()
+            if "pc1_minus_ecac" in prev_period_df.columns
+            else pc1_minus_ecac
+        )
+        prev_conversion = prev_sales / prev_leads if prev_leads > 0 else 0
     else:
         prev_sales = total_sales
         prev_purchases = total_purchases
@@ -794,6 +794,300 @@ def render_hub_comparison_section(filtered_data, country_filter):
             )
         else:
             st.info("No hay datos de inventario disponibles")
+
+
+def render_performance_table_section(data, country_filter):
+    """
+    Render collapsible performance table by Region/Hub
+    Shows key KPIs: Entregas, CVR, NPS, Inventario with dynamic aggregation
+    Uses daily_metrics for BOTH views (now has hub-level data)
+    """
+    st.subheader("📋 Performance por Región / Hub")
+
+    # Get period filter
+    period = st.session_state.get("ceo_period", "Últimos 30 días")
+    days = PERIOD_OPTIONS[period]
+    cutoff_date = datetime.now() - timedelta(days=days)
+
+    # Filter daily_metrics by period - this now has hub-level data
+    daily_metrics = data["daily_metrics"].copy()
+    daily_metrics = daily_metrics[daily_metrics["date"] >= cutoff_date]
+
+    # Filter by country if selected
+    if country_filter != "Todos":
+        daily_metrics = daily_metrics[daily_metrics["country"] == country_filter]
+
+    inventory_df = data.get("inventory", pd.DataFrame()).copy()
+    if country_filter != "Todos" and len(inventory_df) > 0:
+        inventory_df = inventory_df[inventory_df["country"] == country_filter]
+
+    if len(daily_metrics) == 0:
+        st.warning("No hay datos para mostrar")
+        return
+
+    # === LEVEL SELECTOR ===
+    col_level, _ = st.columns([2, 1])
+
+    with col_level:
+        aggregation_level = st.radio(
+            "Nivel de agregación",
+            ["Por Región", "Por Hub"],
+            horizontal=True,
+            key="perf_table_level",
+        )
+
+    # === BUILD AGGREGATED DATA ===
+    # Both views use the same daily_metrics source, just aggregated differently
+    if aggregation_level == "Por Región":
+        # Aggregate by country + region (sum all hubs within region)
+        perf_df = (
+            daily_metrics.groupby(["country", "region"])
+            .agg(
+                {
+                    "sales": "sum",
+                    "leads": "sum",
+                    "nps": "mean",
+                }
+            )
+            .reset_index()
+        )
+
+        # Add inventory data (already at region level)
+        if len(inventory_df) > 0:
+            inv_agg = (
+                inventory_df.groupby(["country", "region"])
+                .agg(
+                    {
+                        "total_inventory": "sum",
+                        "available": "sum",
+                        "aging_60_plus": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            perf_df = perf_df.merge(
+                inv_agg, on=["country", "region"], how="left"
+            ).fillna(0)
+        else:
+            perf_df["total_inventory"] = 0
+            perf_df["available"] = 0
+            perf_df["aging_60_plus"] = 0
+
+        # Create display name
+        perf_df["Ubicación"] = perf_df["country"] + " - " + perf_df["region"]
+
+    else:  # Por Hub - Aggregate by hub (more granular, same source data)
+        # Aggregate by country + region + hub
+        perf_df = (
+            daily_metrics.groupby(["country", "region", "hub"])
+            .agg(
+                {
+                    "sales": "sum",
+                    "leads": "sum",
+                    "nps": "mean",
+                }
+            )
+            .reset_index()
+        )
+
+        # Add inventory data by hub (distribute region inventory proportionally)
+        if len(inventory_df) > 0:
+            # Inventory is at region level, distribute proportionally by hub sales
+            inv_by_region = (
+                inventory_df.groupby(["country", "region"])
+                .agg(
+                    {
+                        "total_inventory": "sum",
+                        "available": "sum",
+                        "aging_60_plus": "sum",
+                    }
+                )
+                .reset_index()
+            )
+
+            # Count hubs per region for fallback distribution
+            hubs_per_region = (
+                perf_df.groupby(["country", "region"])
+                .size()
+                .reset_index(name="hub_count")
+            )
+
+            # Merge to get region inventory totals
+            perf_df = perf_df.merge(
+                inv_by_region, on=["country", "region"], how="left"
+            ).fillna(0)
+
+            perf_df = perf_df.merge(
+                hubs_per_region, on=["country", "region"], how="left"
+            ).fillna(1)
+
+            # Calculate hub's proportion of region sales
+            region_sales = perf_df.groupby(["country", "region"])["sales"].transform(
+                "sum"
+            )
+            perf_df["sales_pct"] = np.where(
+                region_sales > 0,
+                perf_df["sales"] / region_sales,
+                1 / perf_df["hub_count"],
+            )
+
+            # Distribute inventory proportionally
+            perf_df["total_inventory"] = (
+                perf_df["total_inventory"] * perf_df["sales_pct"]
+            ).round(0)
+            perf_df["available"] = (perf_df["available"] * perf_df["sales_pct"]).round(
+                0
+            )
+            perf_df["aging_60_plus"] = (
+                perf_df["aging_60_plus"] * perf_df["sales_pct"]
+            ).round(0)
+
+            # Clean up temp columns
+            perf_df = perf_df.drop(columns=["hub_count", "sales_pct"])
+        else:
+            perf_df["total_inventory"] = 0
+            perf_df["available"] = 0
+            perf_df["aging_60_plus"] = 0
+
+        # Create display name - show hub name
+        perf_df["Ubicación"] = perf_df["hub"]
+
+    # === CALCULATE DERIVED METRICS ===
+    perf_df["CVR %"] = np.where(
+        perf_df["leads"] > 0,
+        (perf_df["sales"] / perf_df["leads"] * 100).round(1),
+        0,
+    )
+    perf_df["Aging %"] = np.where(
+        perf_df["total_inventory"] > 0,
+        (perf_df["aging_60_plus"] / perf_df["total_inventory"] * 100).round(1),
+        0,
+    )
+
+    # Fill NaN values
+    perf_df = perf_df.fillna(0)
+
+    # === PREPARE DISPLAY DATAFRAME ===
+    display_df = perf_df[
+        [
+            "Ubicación",
+            "sales",
+            "CVR %",
+            "nps",
+            "total_inventory",
+            "available",
+            "Aging %",
+        ]
+    ].copy()
+
+    display_df.columns = [
+        "Ubicación",
+        "Entregas",
+        "CVR %",
+        "NPS",
+        "Inventario",
+        "Disponible",
+        "Aging 60+ %",
+    ]
+
+    # Sort by Entregas descending
+    display_df = display_df.sort_values("Entregas", ascending=False)
+
+    # === CALCULATE TOTALS ROW ===
+    totals = {
+        "Entregas": display_df["Entregas"].sum(),
+        "CVR %": (perf_df["sales"].sum() / perf_df["leads"].sum() * 100)
+        if perf_df["leads"].sum() > 0
+        else 0,
+        "NPS": display_df["NPS"].mean(),
+        "Inventario": display_df["Inventario"].sum(),
+    }
+
+    # === RENDER IN EXPANDER ===
+    level_label = "regiones" if aggregation_level == "Por Región" else "hubs"
+    with st.expander(
+        f"📊 Ver tabla detallada ({len(display_df)} {level_label})",
+        expanded=False,
+    ):
+        # Summary metrics at top
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Entregas", f"{totals['Entregas']:,.0f}")
+        with col2:
+            st.metric("CVR Promedio", f"{totals['CVR %']:.1f}%")
+        with col3:
+            st.metric("NPS Promedio", f"{totals['NPS']:.0f}")
+        with col4:
+            st.metric("Inventario Total", f"{totals['Inventario']:,.0f}")
+
+        st.markdown("---")
+
+        # Style function for conditional formatting
+        def style_performance(row):
+            styles = [""] * len(row)
+
+            # CVR coloring
+            cvr_idx = 2  # CVR % column
+            cvr = row.iloc[cvr_idx] if not pd.isna(row.iloc[cvr_idx]) else 0
+            if cvr >= 25:
+                styles[cvr_idx] = "background-color: #c8e6c9; color: #1b5e20"
+            elif cvr < 15:
+                styles[cvr_idx] = "background-color: #ffccbc; color: #bf360c"
+
+            # NPS coloring
+            nps_idx = 3  # NPS column
+            nps = row.iloc[nps_idx] if not pd.isna(row.iloc[nps_idx]) else 0
+            if nps >= 70:
+                styles[nps_idx] = "background-color: #c8e6c9; color: #1b5e20"
+            elif nps < 50:
+                styles[nps_idx] = "background-color: #ffccbc; color: #bf360c"
+
+            # Aging coloring
+            aging_idx = 6  # Aging 60+ % column
+            aging = row.iloc[aging_idx] if not pd.isna(row.iloc[aging_idx]) else 0
+            if aging >= 15:
+                styles[aging_idx] = "background-color: #ffccbc; color: #bf360c"
+            elif aging < 8:
+                styles[aging_idx] = "background-color: #c8e6c9; color: #1b5e20"
+
+            return styles
+
+        # Apply styling
+        styled_df = display_df.style.apply(style_performance, axis=1).format(
+            {
+                "Entregas": "{:,.0f}",
+                "CVR %": "{:.1f}%",
+                "NPS": "{:.0f}",
+                "Inventario": "{:,.0f}",
+                "Disponible": "{:,.0f}",
+                "Aging 60+ %": "{:.1f}%",
+            }
+        )
+
+        # Display table
+        st.dataframe(
+            styled_df,
+            use_container_width=True,
+            height=min(450, 50 + len(display_df) * 35),
+            hide_index=True,
+        )
+
+        # Legend
+        st.markdown("---")
+        st.caption(
+            "**Leyenda:** 🟢 Verde = Buen performance | 🔴 Rojo = Necesita atención"
+        )
+
+        # Export button
+        col_export, _ = st.columns([1, 3])
+        with col_export:
+            st.download_button(
+                "📥 Exportar CSV",
+                display_df.to_csv(index=False).encode("utf-8"),
+                f"performance_{level_label}_{datetime.now().strftime('%Y%m%d')}.csv",
+                "text/csv",
+                key="download_perf_table",
+            )
 
 
 def render_alerts_section(data, period_days):

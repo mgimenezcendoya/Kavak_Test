@@ -485,11 +485,15 @@ def render_customer_card(customer, idx):
             st.caption("Ventas")
 
         with col2:
-            st.metric(
-                "Revenue",
-                f"${customer['total_revenue']:,.0f}",
-                label_visibility="collapsed",
-            )
+            # Format revenue in compact form (K for thousands)
+            rev = customer["total_revenue"]
+            if rev >= 1000000:
+                rev_str = f"${rev/1000000:.1f}M"
+            elif rev >= 1000:
+                rev_str = f"${rev/1000:.0f}K"
+            else:
+                rev_str = f"${rev:.0f}"
+            st.metric("Revenue", rev_str, label_visibility="collapsed")
             st.caption("Revenue")
 
         with col3:
@@ -529,7 +533,15 @@ def render_customer_list(filtered_df):
             st.markdown(f"**{customer['num_sales']}** ventas")
 
         with col4:
-            st.markdown(f"**${customer['total_revenue']:,.0f}**")
+            # Format revenue in compact form
+            rev = customer["total_revenue"]
+            if rev >= 1000000:
+                rev_str = f"${rev/1000000:.1f}M"
+            elif rev >= 1000:
+                rev_str = f"${rev/1000:.0f}K"
+            else:
+                rev_str = f"${rev:.0f}"
+            st.markdown(f"**{rev_str}**")
 
         with col5:
             if st.button("→", key=f"list_{customer['customer_id']}_{idx}"):

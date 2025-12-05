@@ -1,6 +1,6 @@
 """
 Data generator for sample/placeholder data
-Uses real delivery data from CSV to create realistic metrics
+Uses real delivery data and unit economics from actual Kavak dashboards
 """
 
 import os
@@ -11,44 +11,184 @@ import numpy as np
 import pandas as pd
 from config import AGENTS_PER_HUB, COUNTRIES, HUBS, REGIONS_HUBS, VEHICLE_SEGMENTS
 
-# Real delivery data from Mexico
+# =============================================================================
+# REAL DATA CONSTANTS - Based on actual Kavak dashboard (December 2024)
+# =============================================================================
+
+# Unit Economics by Country (in USD)
+COUNTRY_UNIT_ECONOMICS = {
+    "México": {
+        "full_margin": (850, 1100),  # $979 USD avg
+        "fin_ins": (1500, 2000),  # $1,738 USD avg (high attach rate)
+        "kt": (180, 280),  # $228 USD avg (Kavak Trade)
+        "pc1": (2700, 3200),  # $2,945 USD avg
+        "ecac": (350, 450),  # $396 USD avg
+        "ticket_avg": (12000, 18000),  # Average ticket in USD
+        "nps_buyer": (38, 48),  # 41 L30D avg
+        "nps_seller": (42, 52),  # 46 L30D avg
+        "efficiency": (0.38, 0.48),  # 42% avg
+    },
+    "Brasil": {
+        "full_margin": (850, 1100),  # $979 USD avg
+        "fin_ins": (700, 1000),  # $855 USD avg (lower attach)
+        "kt": (0, 50),  # $0 USD (not active)
+        "pc1": (1600, 2100),  # $1,834 USD avg
+        "ecac": (400, 520),  # $451 USD avg
+        "ticket_avg": (8000, 14000),
+        "nps_buyer": (72, 85),  # 79 L30D avg (high!)
+        "nps_seller": (68, 80),  # 74 L30D avg
+        "efficiency": (0.50, 0.62),  # 56% avg
+    },
+    "Argentina": {
+        "full_margin": (1100, 1400),  # $1,254 USD avg (higher margin)
+        "fin_ins": (450, 720),  # $584 USD avg
+        "kt": (130, 200),  # $165 USD avg
+        "pc1": (1800, 2200),  # $2,003 USD avg
+        "ecac": (220, 320),  # $263 USD avg (efficient!)
+        "ticket_avg": (10000, 16000),
+        "nps_buyer": (42, 55),  # 48 L30D avg
+        "nps_seller": (68, 80),  # 74 L30D avg
+        "efficiency": (0.50, 0.62),  # 56% avg
+    },
+    "Chile": {
+        "full_margin": (950, 1200),  # $1,083 USD avg
+        "fin_ins": (380, 580),  # $479 USD avg
+        "kt": (120, 185),  # $152 USD avg
+        "pc1": (1500, 1950),  # $1,713 USD avg
+        "ecac": (280, 380),  # $322 USD avg
+        "ticket_avg": (11000, 17000),
+        "nps_buyer": (55, 68),  # 60 L30D avg
+        "nps_seller": (88, 98),  # 94 L30D avg (excellent!)
+        "efficiency": (0.68, 0.82),  # 75% avg (best!)
+    },
+}
+
+# Sales volume scale by country (relative to México = 1.0)
+COUNTRY_VOLUME_SCALE = {
+    "México": 1.0,  # ~480 MTD = ~16/day
+    "Brasil": 0.23,  # ~110 MTD
+    "Argentina": 0.20,  # ~98 MTD
+    "Chile": 0.22,  # ~106 MTD
+}
+
+# Stock Health by Country (Aging distribution)
+COUNTRY_STOCK_HEALTH = {
+    "México": {"aging_0_30": 0.50, "aging_30_90": 0.393, "aging_90_plus": 0.108},
+    "Brasil": {"aging_0_30": 0.447, "aging_30_90": 0.375, "aging_90_plus": 0.178},
+    "Argentina": {"aging_0_30": 0.561, "aging_30_90": 0.279, "aging_90_plus": 0.160},
+    "Chile": {"aging_0_30": 0.586, "aging_30_90": 0.287, "aging_90_plus": 0.127},
+}
+
+# Operational Health by Country
+COUNTRY_OPERATIONAL = {
+    "México": {"readiness": 0.98, "sell_rate_30d": 0.29, "sell_rate_60d": 0.72},
+    "Brasil": {"readiness": 0.93, "sell_rate_30d": 0.48, "sell_rate_60d": 0.72},
+    "Argentina": {"readiness": 0.66, "sell_rate_30d": 0.55, "sell_rate_60d": 0.84},
+    "Chile": {"readiness": 0.81, "sell_rate_30d": 0.58, "sell_rate_60d": 0.87},
+}
+
+# Region-level data for México (from second image)
+MEXICO_REGION_DATA = {
+    "Ciudad de México": {
+        "sales_pct": 0.63,  # ~303 of 480 (CDMX-N + C + P + S)
+        "efficiency": (0.60, 1.0),
+        "full_margin": (350, 450),  # Lower margin in CDMX
+        "pc1": (450, 550),
+    },
+    "Guadalajara": {
+        "sales_pct": 0.085,  # ~41 of 480
+        "efficiency": (0.60, 0.72),
+        "full_margin": (1100, 1350),  # Higher margin
+        "pc1": (2100, 2450),
+    },
+    "Monterrey": {
+        "sales_pct": 0.075,  # ~36 of 480
+        "efficiency": (0.45, 0.58),
+        "full_margin": (550, 750),
+        "pc1": (1550, 1850),
+    },
+    "Puebla": {
+        "sales_pct": 0.05,  # ~24 of 480
+        "efficiency": (0.75, 0.88),
+        "full_margin": (850, 1100),
+        "pc1": (1850, 2150),
+    },
+    "Querétaro": {
+        "sales_pct": 0.048,  # ~23 of 480
+        "efficiency": (0.55, 0.68),
+        "full_margin": (780, 1000),
+        "pc1": (1800, 2100),
+    },
+    "Cuernavaca": {
+        "sales_pct": 0.073,  # ~35 of 480 (CUE-PUE)
+        "efficiency": (0.72, 0.88),
+        "full_margin": (850, 1100),
+        "pc1": (1900, 2200),
+    },
+    "León": {
+        "sales_pct": 0.03,
+        "efficiency": (0.50, 0.65),
+        "full_margin": (700, 900),
+        "pc1": (1600, 1900),
+    },
+    "San Luis Potosí": {
+        "sales_pct": 0.02,
+        "efficiency": (0.45, 0.60),
+        "full_margin": (650, 850),
+        "pc1": (1500, 1800),
+    },
+}
+
+# Real delivery data from Mexico (historical)
 REAL_DELIVERIES_DATA = {
-    "MX": {
+    "México": {
         "Ciudad de México": {
+            "2025-12": 303,  # MTD estimate
             "2025-11": 2465,
             "2025-10": 3327,
             "2025-09": 2973,
-            "2025-08": 1390,
         },
         "Guadalajara": {
+            "2025-12": 41,
             "2025-11": 355,
             "2025-10": 544,
             "2025-09": 413,
-            "2025-08": 154,
         },
         "Monterrey": {
+            "2025-12": 36,
             "2025-11": 268,
             "2025-10": 436,
             "2025-09": 430,
-            "2025-08": 127,
         },
         "Puebla": {
+            "2025-12": 24,
             "2025-11": 209,
             "2025-10": 253,
             "2025-09": 221,
-            "2025-08": 116,
         },
         "Querétaro": {
+            "2025-12": 23,
             "2025-11": 262,
             "2025-10": 350,
             "2025-09": 278,
-            "2025-08": 108,
         },
         "Cuernavaca": {
+            "2025-12": 35,
             "2025-11": 77,
             "2025-10": 113,
             "2025-09": 73,
-            "2025-08": 41,
+        },
+        "León": {
+            "2025-12": 10,
+            "2025-11": 65,
+            "2025-10": 85,
+            "2025-09": 70,
+        },
+        "San Luis Potosí": {
+            "2025-12": 8,
+            "2025-11": 45,
+            "2025-10": 60,
+            "2025-09": 50,
         },
     }
 }
@@ -73,106 +213,191 @@ def generate_sample_data():
         "funnel": generate_funnel_data(date_range),
         "alerts": generate_alerts(),
         "customers": generate_customer_data(),
+        "appointments": generate_appointments_data(),  # NEW: Citas/Agenda
+        "kavakos": generate_kavakos_data(),  # NEW: Lista de Kavakos
     }
 
     return data
 
 
 def generate_daily_metrics(date_range):
-    """Generate daily aggregated metrics by country, region and hub using real delivery data"""
+    """
+    Generate daily aggregated metrics by country, region and hub.
+    Uses real unit economics data from actual Kavak dashboards.
+    Data is generated at HUB level (most granular), so aggregating by region
+    will correctly sum all hubs within that region.
+    """
     records = []
 
     for country in COUNTRIES:
+        # Get country-specific unit economics
+        country_ue = COUNTRY_UNIT_ECONOMICS.get(
+            country,
+            COUNTRY_UNIT_ECONOMICS["México"],  # Default to Mexico
+        )
+        volume_scale = COUNTRY_VOLUME_SCALE.get(country, 0.2)
+
         # Get regions for this country
-        regions = HUBS[country]  # These are now region names
+        regions = HUBS[country]  # Region names
 
         # Get real delivery data if available for this country
         country_deliveries = REAL_DELIVERIES_DATA.get(country, {})
 
         for region in regions:
-            # Get real deliveries for this region (using legacy name mapping)
-            hub_deliveries = country_deliveries.get(region, {})
+            # Get all hubs for this region
+            region_hubs = REGIONS_HUBS.get(country, {}).get(region, [region])
 
-            for date in date_range:
-                # Try to get real delivery data for this month
-                month_key = date.strftime("%Y-%m")
+            if not region_hubs:
+                region_hubs = [region]
 
-                # Base sales/deliveries from real data or fallback to random
-                if month_key in hub_deliveries:
-                    # Use real data and distribute across days of the month
-                    monthly_deliveries = hub_deliveries[month_key]
-                    days_in_month = (date.replace(day=28) + timedelta(days=4)).replace(
-                        day=1
-                    ) - timedelta(days=1)
-                    avg_daily = monthly_deliveries / days_in_month.day
-                    # Add some daily variation
-                    sales = int(avg_daily * np.random.uniform(0.7, 1.3))
+            # Get real deliveries for this region (to distribute among hubs)
+            region_real_deliveries = country_deliveries.get(region, {})
+
+            # Get region-specific data for México
+            region_data = (
+                MEXICO_REGION_DATA.get(region, None) if country == "México" else None
+            )
+
+            # Calculate hub weights based on hub name patterns (simulate different sizes)
+            hub_weights = {}
+            for hub in region_hubs:
+                # Larger hubs get more weight
+                if any(
+                    x in hub.lower()
+                    for x in [
+                        "cdmx",
+                        "fashion",
+                        "hq",
+                        "midtown",
+                        "palermo",
+                        "pinheiros",
+                    ]
+                ):
+                    hub_weights[hub] = 1.5
+                elif any(x in hub.lower() for x in ["aliado", "carshop", "wh"]):
+                    hub_weights[hub] = 0.6
                 else:
-                    # Fallback to generated data with region-specific scaling
-                    region_scale = {
-                        "Ciudad de México": 3.0,
-                        "Guadalajara": 0.5,
-                        "Monterrey": 0.4,
-                        "Puebla": 0.25,
-                        "Querétaro": 0.3,
-                        "Cuernavaca": 0.1,
-                        "León": 0.2,
-                        "San Luis Potosí": 0.15,
-                        "Santiago": 1.0,
-                        "Valparaíso": 0.4,
-                        "Concepción": 0.3,
-                        "São Paulo": 2.0,
-                        "Río de Janeiro": 1.5,
-                        "Brasilia": 0.8,
-                        "Buenos Aires": 1.5,
-                        "Córdoba": 0.6,
-                        "Rosario": 0.5,
-                    }.get(region, 1.0)
+                    hub_weights[hub] = 1.0
 
-                    # Add some seasonality and trends
-                    day_factor = 1 + 0.1 * np.sin(2 * np.pi * date.dayofyear / 365)
-                    trend_factor = 1 + 0.02 * (date - date_range[0]).days / len(
-                        date_range
+            total_weight = sum(hub_weights.values())
+
+            # Region scale for fallback data generation
+            if region_data:
+                region_scale = region_data["sales_pct"] * 30  # Scale factor
+            else:
+                region_scale = {
+                    # México - regiones específicas (based on real MTD data)
+                    "Ciudad de México": 10.0,  # ~303 MTD = ~10/day
+                    "Guadalajara": 1.4,  # ~41 MTD
+                    "Monterrey": 1.2,  # ~36 MTD
+                    "Puebla": 0.8,  # ~24 MTD
+                    "Querétaro": 0.77,  # ~23 MTD
+                    "Cuernavaca": 1.17,  # ~35 MTD
+                    "León": 0.33,  # ~10 MTD
+                    "San Luis Potosí": 0.27,  # ~8 MTD
+                    # Otros países - la región es el país
+                    "Brasil": 3.7,  # ~110 MTD
+                    "Argentina": 3.3,  # ~98 MTD
+                    "Chile": 3.5,  # ~106 MTD
+                }.get(region, 1.0)
+
+            for hub in region_hubs:
+                # Hub's proportion of region's total
+                hub_proportion = hub_weights[hub] / total_weight
+
+                for date in date_range:
+                    month_key = date.strftime("%Y-%m")
+
+                    # Base sales/deliveries
+                    if month_key in region_real_deliveries:
+                        # Use real data distributed by hub proportion
+                        monthly_deliveries = region_real_deliveries[month_key]
+                        hub_monthly = monthly_deliveries * hub_proportion
+                        days_in_month = (
+                            date.replace(day=28) + timedelta(days=4)
+                        ).replace(day=1) - timedelta(days=1)
+                        avg_daily = hub_monthly / days_in_month.day
+                        sales = max(1, int(avg_daily * np.random.uniform(0.7, 1.3)))
+                    else:
+                        # Fallback: generate data scaled by region and hub proportion
+                        day_factor = 1 + 0.1 * np.sin(2 * np.pi * date.dayofyear / 365)
+                        trend_factor = 1 + 0.02 * (date - date_range[0]).days / len(
+                            date_range
+                        )
+
+                        # Base sales per hub
+                        base_sales = np.random.poisson(2) * hub_weights[hub]
+                        sales = max(
+                            1,
+                            int(base_sales * day_factor * trend_factor * region_scale),
+                        )
+
+                    # Calculate funnel metrics backwards from sales
+                    # Based on real efficiency: Sales/Purchases ratio
+                    efficiency_range = country_ue["efficiency"]
+                    efficiency = np.random.uniform(*efficiency_range)
+
+                    # Purchases = Sales / Efficiency (efficiency < 1 means more purchases than sales)
+                    purchases = max(1, int(sales / efficiency))
+
+                    # Funnel: Leads → Appointments (60%) → Reservations (50%) → Sales (75%)
+                    reservations = max(1, int(sales / np.random.uniform(0.70, 0.85)))
+                    appointments = max(
+                        1, int(reservations / np.random.uniform(0.45, 0.55))
                     )
+                    leads = max(1, int(appointments / np.random.uniform(0.55, 0.65)))
 
-                    sales = int(
-                        np.random.poisson(15) * day_factor * trend_factor * region_scale
+                    # Unit economics from real data
+                    ticket_avg = np.random.uniform(*country_ue["ticket_avg"])
+                    full_margin = np.random.uniform(*country_ue["full_margin"])
+                    fin_ins = np.random.uniform(*country_ue["fin_ins"])
+                    kt = np.random.uniform(*country_ue["kt"])
+                    pc1 = full_margin + fin_ins + kt  # PC1 = FM + F&I + KT
+                    ecac_range = country_ue["ecac"]
+                    ecac = np.random.uniform(*ecac_range)
+
+                    # NPS from real data
+                    nps_buyer = np.random.uniform(*country_ue["nps_buyer"])
+                    nps_seller = np.random.uniform(*country_ue["nps_seller"])
+                    # Average NPS for general metric
+                    nps = (nps_buyer + nps_seller) / 2
+
+                    # Cost per lead derived from eCAC
+                    # eCAC = (CPL * Leads) / Sales, so CPL = (eCAC * Sales) / Leads
+                    cost_per_lead = (ecac * sales) / leads if leads > 0 else ecac / 3
+
+                    records.append(
+                        {
+                            "date": date,
+                            "country": country,
+                            "region": region,
+                            "hub": hub,
+                            "leads": leads,
+                            "appointments": appointments,
+                            "reservations": reservations,
+                            "sales": sales,
+                            "purchases": purchases,
+                            "cancellations": int(
+                                reservations * np.random.uniform(0.05, 0.12)
+                            ),
+                            "noshow": int(appointments * np.random.uniform(0.08, 0.18)),
+                            "nps": nps,
+                            "nps_buyer": nps_buyer,
+                            "nps_seller": nps_seller,
+                            "csat": np.random.uniform(75, 92),
+                            "revenue": sales * ticket_avg,
+                            "ticket_avg": ticket_avg,
+                            "full_margin": full_margin,
+                            "fin_ins": fin_ins,
+                            "kt": kt,
+                            "pc1": pc1,
+                            "ecac": ecac,
+                            "pc1_minus_ecac": pc1 - ecac,
+                            "cost_per_lead": cost_per_lead,
+                            "sla_lead_to_sale": np.random.uniform(4, 12),
+                            "efficiency": efficiency,
+                        }
                     )
-
-                # Calculate funnel metrics backwards from sales (deliveries)
-                # Typical conversion: Leads → Appointments (60%) → Reservations (50%) → Sales (75%)
-                reservations = int(sales / np.random.uniform(0.7, 0.8))
-                appointments = int(reservations / np.random.uniform(0.45, 0.55))
-                leads = int(appointments / np.random.uniform(0.55, 0.65))
-
-                # Purchases (Rotation model: buy to sell)
-                # Reposition ratio varies slightly to simulate stock building/depletion
-                reposition_ratio = np.random.uniform(0.9, 1.2)
-                purchases = int(sales * reposition_ratio)
-
-                records.append(
-                    {
-                        "date": date,
-                        "country": country,
-                        "region": region,  # NEW: Region column
-                        "hub": region,  # For backwards compatibility, hub = region for now
-                        "leads": leads,
-                        "appointments": appointments,
-                        "reservations": reservations,
-                        "sales": sales,  # This is actually deliveries
-                        "purchases": purchases,
-                        "cancellations": int(
-                            reservations * np.random.uniform(0.05, 0.15)
-                        ),
-                        "noshow": int(appointments * np.random.uniform(0.1, 0.25)),
-                        "nps": np.random.uniform(50, 85),
-                        "csat": np.random.uniform(70, 95),
-                        "revenue": sales * np.random.uniform(10000, 22000),
-                        "ticket_avg": np.random.uniform(10000, 22000),
-                        "cost_per_lead": np.random.uniform(60, 120),
-                        "sla_lead_to_sale": np.random.uniform(3, 10),
-                    }
-                )
 
     return pd.DataFrame(records)
 
@@ -200,7 +425,7 @@ def generate_agent_performance():
                 else [region]
             )
 
-            for hub in hubs_to_use:
+            for hub in hubs_to_use[:3]:  # Use up to 3 hubs per region
                 for i in range(AGENTS_PER_HUB):
                     # Generate agent name - lista ampliada para más variedad
                     first_names = [
@@ -536,37 +761,67 @@ def generate_agent_performance():
 
 
 def generate_inventory_data():
-    """Generate inventory data by region and segment"""
+    """Generate inventory data by region and segment using real stock health data"""
     records = []
 
     for country in COUNTRIES:
+        # Get country-specific stock health data
+        stock_health = COUNTRY_STOCK_HEALTH.get(country, COUNTRY_STOCK_HEALTH["México"])
+        operational = COUNTRY_OPERATIONAL.get(country, COUNTRY_OPERATIONAL["México"])
+
         regions = HUBS[country]
         for region in regions:
             for segment in VEHICLE_SEGMENTS:
-                total_inventory = int(np.random.uniform(20, 100))
-                reserved = int(total_inventory * np.random.uniform(0.1, 0.3))
-                vip = int(total_inventory * np.random.uniform(0.05, 0.15))
+                # Scale inventory by country size
+                base_inventory = {
+                    "México": (40, 120),
+                    "Brasil": (25, 80),
+                    "Argentina": (20, 60),
+                    "Chile": (20, 65),
+                }.get(country, (20, 60))
+
+                total_inventory = int(np.random.uniform(*base_inventory))
+
+                # Reserved and VIP based on readiness
+                readiness = operational["readiness"]
+                reserved = int(total_inventory * np.random.uniform(0.08, 0.18))
+                vip = int(total_inventory * np.random.uniform(0.03, 0.10))
+
+                # Aging based on real stock health data
+                aging_0_30_pct = stock_health["aging_0_30"] + np.random.uniform(
+                    -0.05, 0.05
+                )
+                aging_30_90_pct = stock_health["aging_30_90"] + np.random.uniform(
+                    -0.05, 0.05
+                )
+                aging_90_plus_pct = stock_health["aging_90_plus"] + np.random.uniform(
+                    -0.03, 0.03
+                )
+
+                # Aging 60+ is approximately aging_30_90 * 0.4 + aging_90_plus
+                aging_60_plus_pct = (aging_30_90_pct * 0.4) + aging_90_plus_pct
 
                 records.append(
                     {
                         "country": country,
-                        "region": region,  # NEW: Region column
+                        "region": region,
                         "hub": region,  # For backwards compatibility
                         "segment": segment,
                         "total_inventory": total_inventory,
-                        "available": total_inventory - reserved - vip,
+                        "available": int(
+                            (total_inventory - reserved - vip) * readiness
+                        ),
                         "reserved": reserved,
                         "vip": vip,
-                        "aging_0_30": int(
-                            total_inventory * np.random.uniform(0.4, 0.6)
-                        ),
-                        "aging_30_60": int(
-                            total_inventory * np.random.uniform(0.2, 0.4)
-                        ),
-                        "aging_60_plus": int(
-                            total_inventory * np.random.uniform(0.05, 0.2)
-                        ),
-                        "avg_days_in_inventory": np.random.uniform(15, 60),
+                        "aging_0_30": int(total_inventory * aging_0_30_pct),
+                        "aging_30_60": int(total_inventory * aging_30_90_pct * 0.6),
+                        "aging_60_plus": int(total_inventory * aging_60_plus_pct),
+                        "avg_days_in_inventory": np.random.uniform(18, 55),
+                        "sell_rate_30d": operational["sell_rate_30d"]
+                        + np.random.uniform(-0.05, 0.05),
+                        "sell_rate_60d": operational["sell_rate_60d"]
+                        + np.random.uniform(-0.05, 0.05),
+                        "readiness": readiness + np.random.uniform(-0.03, 0.03),
                     }
                 )
 
@@ -678,10 +933,10 @@ def generate_customer_data():
                 else [region]
             )
 
-            for hub in hubs_to_use:
+            for hub in hubs_to_use[:3]:  # Up to 3 hubs per region
                 num_customers = np.random.randint(
-                    25, 45
-                )  # 25-45 customers per hub - aumentado significativamente
+                    40, 70
+                )  # 40-70 customers per hub - increased for better demo
 
                 for _ in range(num_customers):
                     # Customer basic info
@@ -1281,3 +1536,603 @@ def generate_sample_conversation(interest_type, budget, financing, tradein, vehi
         )
 
     return messages
+
+
+def generate_appointments_data():
+    """
+    Generate appointments/agenda data for the current month
+    Includes past, today, and future appointments
+    """
+    appointments = []
+    appointment_id = 5000
+
+    # Current date info
+    today = datetime.now()
+    current_month_start = today.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+
+    # Calculate end of month
+    if today.month == 12:
+        next_month = today.replace(year=today.year + 1, month=1, day=1)
+    else:
+        next_month = today.replace(month=today.month + 1, day=1)
+    current_month_end = next_month - timedelta(days=1)
+
+    # Appointment types
+    appointment_types = [
+        {"type": "Test Drive", "duration_min": 45, "icon": "🚗"},
+        {"type": "Evaluación Trade-in", "duration_min": 30, "icon": "🔄"},
+        {"type": "Firma de Contrato", "duration_min": 60, "icon": "📝"},
+        {"type": "Entrega de Vehículo", "duration_min": 90, "icon": "🎉"},
+        {"type": "Consulta Financiamiento", "duration_min": 30, "icon": "💰"},
+        {"type": "Revisión de Vehículo", "duration_min": 45, "icon": "🔍"},
+        {"type": "Primera Visita", "duration_min": 60, "icon": "👋"},
+        {"type": "Seguimiento", "duration_min": 30, "icon": "📞"},
+    ]
+
+    # Appointment statuses
+    statuses_past = ["Completada", "No Show", "Cancelada", "Reagendada"]
+    statuses_future = ["Confirmada", "Pendiente", "Por Confirmar"]
+
+    # Time slots (business hours)
+    time_slots = [
+        "09:00",
+        "09:30",
+        "10:00",
+        "10:30",
+        "11:00",
+        "11:30",
+        "12:00",
+        "12:30",
+        "13:00",
+        "14:00",
+        "14:30",
+        "15:00",
+        "15:30",
+        "16:00",
+        "16:30",
+        "17:00",
+        "17:30",
+        "18:00",
+    ]
+
+    # Customer names for appointments
+    first_names = [
+        "Carlos",
+        "María",
+        "José",
+        "Ana",
+        "Luis",
+        "Carmen",
+        "Miguel",
+        "Laura",
+        "Fernando",
+        "Patricia",
+        "Ricardo",
+        "Elena",
+        "Jorge",
+        "Isabel",
+        "Diego",
+        "Sofía",
+        "Andrés",
+        "Valentina",
+        "Pablo",
+        "Camila",
+        "Roberto",
+        "Gabriela",
+        "Sergio",
+        "Alejandra",
+        "Francisco",
+        "Daniela",
+        "Eduardo",
+        "Paulina",
+    ]
+    last_names = [
+        "González",
+        "Rodríguez",
+        "Martínez",
+        "López",
+        "García",
+        "Hernández",
+        "Pérez",
+        "Sánchez",
+        "Ramírez",
+        "Torres",
+        "Flores",
+        "Rivera",
+        "Gómez",
+        "Díaz",
+        "Morales",
+        "Vargas",
+        "Rojas",
+        "Castro",
+        "Ortiz",
+        "Ruiz",
+    ]
+
+    # Vehicle options for appointments
+    vehicles = [
+        {"brand": "Toyota", "model": "RAV4", "year": 2022, "price": 385000},
+        {"brand": "Honda", "model": "CR-V", "year": 2021, "price": 365000},
+        {"brand": "Nissan", "model": "X-Trail", "year": 2023, "price": 420000},
+        {"brand": "Mazda", "model": "CX-5", "year": 2022, "price": 395000},
+        {"brand": "Volkswagen", "model": "Tiguan", "year": 2021, "price": 355000},
+        {"brand": "Toyota", "model": "Corolla", "year": 2022, "price": 285000},
+        {"brand": "Honda", "model": "Civic", "year": 2023, "price": 325000},
+        {"brand": "Nissan", "model": "Sentra", "year": 2022, "price": 275000},
+        {"brand": "Mazda", "model": "3", "year": 2021, "price": 295000},
+        {"brand": "Ford", "model": "Escape", "year": 2022, "price": 375000},
+        {"brand": "Chevrolet", "model": "Equinox", "year": 2021, "price": 345000},
+        {"brand": "Hyundai", "model": "Tucson", "year": 2023, "price": 380000},
+    ]
+
+    # Generate appointments for each hub
+    for country in COUNTRIES:
+        regions = HUBS[country]
+        for region in regions:
+            region_hubs = REGIONS_HUBS.get(country, {}).get(region, [region])
+            if not region_hubs:
+                region_hubs = [region]
+
+            for hub in region_hubs[:3]:  # Use up to 3 hubs per region
+                # Get agents for this hub
+                agent_ids = list(range(1, AGENTS_PER_HUB + 1))
+
+                # Generate appointments for the entire month
+                current_date = current_month_start
+                while current_date <= current_month_end:
+                    # Skip Sundays (day 6)
+                    if current_date.weekday() == 6:
+                        current_date += timedelta(days=1)
+                        continue
+
+                    # Number of appointments per day (more on weekends) - INCREASED
+                    if current_date.weekday() == 5:  # Saturday
+                        num_appointments = np.random.randint(15, 25)
+                    else:
+                        num_appointments = np.random.randint(10, 20)
+
+                    for _ in range(num_appointments):
+                        # Select random agent
+                        agent_id = random.choice(agent_ids)
+
+                        # Select appointment type
+                        appt_type = random.choice(appointment_types)
+
+                        # Select time slot
+                        time_str = random.choice(time_slots)
+                        hour, minute = map(int, time_str.split(":"))
+                        appt_datetime = current_date.replace(hour=hour, minute=minute)
+
+                        # Determine status based on date
+                        if current_date.date() < today.date():
+                            # Past appointment
+                            status_weights = [0.70, 0.15, 0.10, 0.05]
+                            status = np.random.choice(statuses_past, p=status_weights)
+                        elif current_date.date() == today.date():
+                            # Today's appointment
+                            if appt_datetime < datetime.now():
+                                status_weights = [0.75, 0.12, 0.08, 0.05]
+                                status = np.random.choice(
+                                    statuses_past, p=status_weights
+                                )
+                            else:
+                                status_weights = [0.60, 0.25, 0.15]
+                                status = np.random.choice(
+                                    statuses_future, p=status_weights
+                                )
+                        else:
+                            # Future appointment
+                            status_weights = [0.55, 0.30, 0.15]
+                            status = np.random.choice(statuses_future, p=status_weights)
+
+                        # Customer info
+                        customer_name = (
+                            f"{random.choice(first_names)} {random.choice(last_names)}"
+                        )
+                        customer_id = f"CL-{np.random.randint(1000, 9999)}"
+                        customer_phone = f"+52 55 {np.random.randint(1000, 9999)} {np.random.randint(1000, 9999)}"
+
+                        # Vehicle of interest
+                        vehicle = random.choice(vehicles)
+                        vehicle_str = (
+                            f"{vehicle['brand']} {vehicle['model']} {vehicle['year']}"
+                        )
+
+                        # Priority based on appointment type
+                        if appt_type["type"] in [
+                            "Firma de Contrato",
+                            "Entrega de Vehículo",
+                        ]:
+                            priority = "Alta"
+                        elif appt_type["type"] in ["Test Drive", "Evaluación Trade-in"]:
+                            priority = "Media"
+                        else:
+                            priority = "Normal"
+
+                        # Notes
+                        notes_options = [
+                            "Cliente muy interesado",
+                            "Traerá acompañante",
+                            "Ya vio el auto online",
+                            "Tiene trade-in",
+                            "Preguntó por financiamiento",
+                            "Cliente referido",
+                            "Segunda visita",
+                            "Viene de otra ciudad",
+                            "Prefiere pago de contado",
+                            "Interesado en garantía extendida",
+                            "",
+                            "",
+                        ]
+                        notes = random.choice(notes_options)
+
+                        # Result (for completed appointments)
+                        result = None
+                        if status == "Completada":
+                            result_options = [
+                                "Interesado - Seguimiento",
+                                "Reservó vehículo",
+                                "Firmó contrato",
+                                "Pendiente decisión",
+                                "No le interesó",
+                                "Solicitó cotización",
+                                "Agendó segunda cita",
+                            ]
+                            result_weights = [0.25, 0.20, 0.15, 0.15, 0.10, 0.10, 0.05]
+                            result = np.random.choice(result_options, p=result_weights)
+
+                        appointments.append(
+                            {
+                                "appointment_id": f"APT-{appointment_id}",
+                                "date": current_date.date(),
+                                "time": time_str,
+                                "datetime": appt_datetime,
+                                "country": country,
+                                "region": region,
+                                "hub": hub,
+                                "agent_id": agent_id,
+                                "customer_id": customer_id,
+                                "customer_name": customer_name,
+                                "customer_phone": customer_phone,
+                                "appointment_type": appt_type["type"],
+                                "type_icon": appt_type["icon"],
+                                "duration_min": appt_type["duration_min"],
+                                "vehicle_interest": vehicle_str,
+                                "vehicle_price": vehicle["price"],
+                                "status": status,
+                                "priority": priority,
+                                "notes": notes,
+                                "result": result,
+                                "is_today": current_date.date() == today.date(),
+                                "is_past": current_date.date() < today.date(),
+                                "is_future": current_date.date() > today.date(),
+                                "week_number": current_date.isocalendar()[1],
+                                "day_of_week": current_date.strftime("%A"),
+                                "day_of_week_es": [
+                                    "Lunes",
+                                    "Martes",
+                                    "Miércoles",
+                                    "Jueves",
+                                    "Viernes",
+                                    "Sábado",
+                                    "Domingo",
+                                ][current_date.weekday()],
+                            }
+                        )
+
+                        appointment_id += 1
+
+                    current_date += timedelta(days=1)
+
+    return pd.DataFrame(appointments)
+
+
+def generate_kavakos_data():
+    """
+    Generate detailed Kavako (agent) profiles with extended information
+    """
+    kavakos = []
+    kavako_id = 1
+
+    # Extended first names
+    first_names = [
+        "Juan",
+        "María",
+        "Carlos",
+        "Ana",
+        "Luis",
+        "Carmen",
+        "José",
+        "Patricia",
+        "Miguel",
+        "Laura",
+        "Fernando",
+        "Elena",
+        "Ricardo",
+        "Isabel",
+        "Diego",
+        "Sofía",
+        "Andrés",
+        "Valentina",
+        "Pablo",
+        "Camila",
+        "Daniel",
+        "Mariana",
+        "Roberto",
+        "Gabriela",
+        "Sergio",
+        "Alejandra",
+        "Francisco",
+        "Daniela",
+        "Eduardo",
+        "Paulina",
+        "Javier",
+        "Fernanda",
+        "Oscar",
+        "Andrea",
+        "Raúl",
+        "Natalia",
+        "Arturo",
+        "Mónica",
+        "Héctor",
+        "Verónica",
+        "Alberto",
+        "Claudia",
+        "Rafael",
+        "Lorena",
+        "Guillermo",
+        "Sandra",
+        "Enrique",
+        "Adriana",
+        "Armando",
+    ]
+
+    last_names = [
+        "García",
+        "Rodríguez",
+        "Martínez",
+        "López",
+        "González",
+        "Pérez",
+        "Sánchez",
+        "Ramírez",
+        "Torres",
+        "Flores",
+        "Rivera",
+        "Gómez",
+        "Hernández",
+        "Díaz",
+        "Morales",
+        "Vargas",
+        "Rojas",
+        "Castro",
+        "Ortiz",
+        "Ruiz",
+        "Jiménez",
+        "Moreno",
+        "Medina",
+        "Aguilar",
+        "Cruz",
+        "Reyes",
+        "Herrera",
+        "Navarro",
+        "Domínguez",
+        "Vega",
+        "Mendoza",
+    ]
+
+    # Specializations
+    specializations = [
+        "SUVs y Crossovers",
+        "Sedanes Premium",
+        "Vehículos Familiares",
+        "Autos Compactos",
+        "Pickups y Comerciales",
+        "Financiamiento Especializado",
+        "Trade-in Expert",
+        "Clientes Corporativos",
+        "Vehículos de Lujo",
+        "Primera Compra",
+    ]
+
+    # Languages
+    languages_options = [
+        ["Español"],
+        ["Español", "Inglés"],
+        ["Español", "Inglés", "Portugués"],
+        ["Español", "Francés"],
+    ]
+
+    # Certifications
+    certifications_pool = [
+        "Certificado Kavak Pro",
+        "Especialista en Financiamiento",
+        "Experto Trade-in",
+        "Asesor Premium",
+        "Certificación NPS Excellence",
+        "Top Performer Q3 2024",
+        "Mejor Vendedor Regional",
+        "Curso Servicio al Cliente Avanzado",
+    ]
+
+    today = datetime.now()
+
+    for country in COUNTRIES:
+        regions = HUBS[country]
+        for region in regions:
+            region_hubs = REGIONS_HUBS.get(country, {}).get(region, [region])
+            if not region_hubs:
+                region_hubs = [region]
+
+            for hub in region_hubs[:3]:  # Up to 3 hubs per region
+                # Generate 15-25 kavakos per hub
+                num_kavakos = np.random.randint(15, 26)
+
+                for i in range(num_kavakos):
+                    name = f"{random.choice(first_names)} {random.choice(last_names)}"
+                    email = f"{name.lower().replace(' ', '.').replace('á','a').replace('é','e').replace('í','i').replace('ó','o').replace('ú','u')}@kavak.com"
+
+                    # Seniority
+                    months_at_kavak = np.random.randint(3, 48)
+                    hire_date = today - timedelta(days=months_at_kavak * 30)
+
+                    if months_at_kavak >= 24:
+                        seniority = "Senior"
+                        base_conversion = np.random.uniform(0.18, 0.28)
+                    elif months_at_kavak >= 12:
+                        seniority = "Mid"
+                        base_conversion = np.random.uniform(0.14, 0.22)
+                    else:
+                        seniority = "Junior"
+                        base_conversion = np.random.uniform(0.10, 0.18)
+
+                    # Performance metrics (current month)
+                    leads_assigned = np.random.randint(80, 200)
+                    appointments_scheduled = int(
+                        leads_assigned * np.random.uniform(0.35, 0.55)
+                    )
+                    appointments_completed = int(
+                        appointments_scheduled * np.random.uniform(0.70, 0.90)
+                    )
+                    reservations = int(
+                        appointments_completed * np.random.uniform(0.40, 0.65)
+                    )
+                    sales = int(reservations * np.random.uniform(0.60, 0.85))
+
+                    # Calculate metrics
+                    conversion_rate = (
+                        sales / leads_assigned if leads_assigned > 0 else 0
+                    )
+                    show_rate = (
+                        appointments_completed / appointments_scheduled
+                        if appointments_scheduled > 0
+                        else 0
+                    )
+
+                    # Today's schedule
+                    appointments_today = np.random.randint(3, 8)
+                    appointments_completed_today = np.random.randint(
+                        0, min(appointments_today, 4)
+                    )
+                    appointments_pending_today = (
+                        appointments_today - appointments_completed_today
+                    )
+
+                    # This week
+                    appointments_this_week = np.random.randint(15, 35)
+                    sales_this_week = np.random.randint(2, 8)
+
+                    # Ancillaries
+                    financing_penetration = np.random.uniform(0.35, 0.65)
+                    insurance_penetration = np.random.uniform(0.40, 0.70)
+                    warranty_penetration = np.random.uniform(0.25, 0.55)
+
+                    # NPS & CSAT
+                    nps = np.random.uniform(55, 92)
+                    csat = np.random.uniform(70, 98)
+
+                    # Response time (hours)
+                    avg_response_time = np.random.uniform(0.3, 3.5)
+
+                    # Points and level
+                    total_points = int(
+                        sales * 100
+                        + sales * financing_penetration * 50
+                        + sales * insurance_penetration * 20
+                        + sales * warranty_penetration * 30
+                    )
+
+                    if total_points >= 1500:
+                        level = "💎 Diamond"
+                    elif total_points >= 1000:
+                        level = "🥇 Gold"
+                    elif total_points >= 500:
+                        level = "🥈 Silver"
+                    else:
+                        level = "🥉 Bronze"
+
+                    # Ownership score
+                    ownership_score = np.random.uniform(75, 98)
+
+                    # Specialization and certifications
+                    specialization = random.choice(specializations)
+                    num_certs = np.random.randint(1, 4)
+                    certifications = random.sample(certifications_pool, num_certs)
+                    languages = random.choice(languages_options)
+
+                    # Status
+                    status_options = [
+                        "Disponible",
+                        "En cita",
+                        "Ocupado",
+                        "Almuerzo",
+                        "Disponible",
+                    ]
+                    status_weights = [0.40, 0.25, 0.15, 0.05, 0.15]
+                    current_status = np.random.choice(status_options, p=status_weights)
+
+                    # Avatar placeholder
+                    avatar_colors = [
+                        "#7C3AED",
+                        "#10B981",
+                        "#F59E0B",
+                        "#EF4444",
+                        "#3B82F6",
+                        "#EC4899",
+                    ]
+
+                    kavakos.append(
+                        {
+                            "kavako_id": kavako_id,
+                            "name": name,
+                            "email": email,
+                            "phone": f"+52 55 {np.random.randint(1000, 9999)} {np.random.randint(1000, 9999)}",
+                            "country": country,
+                            "region": region,
+                            "hub": hub,
+                            "seniority": seniority,
+                            "months_at_kavak": months_at_kavak,
+                            "hire_date": hire_date,
+                            "specialization": specialization,
+                            "certifications": certifications,
+                            "languages": languages,
+                            "current_status": current_status,
+                            "avatar_color": random.choice(avatar_colors),
+                            # Monthly metrics
+                            "leads_assigned": leads_assigned,
+                            "appointments_scheduled": appointments_scheduled,
+                            "appointments_completed": appointments_completed,
+                            "reservations": reservations,
+                            "sales": sales,
+                            "conversion_rate": conversion_rate,
+                            "show_rate": show_rate,
+                            # Today
+                            "appointments_today": appointments_today,
+                            "appointments_completed_today": appointments_completed_today,
+                            "appointments_pending_today": appointments_pending_today,
+                            # This week
+                            "appointments_this_week": appointments_this_week,
+                            "sales_this_week": sales_this_week,
+                            # Ancillaries
+                            "financing_penetration": financing_penetration,
+                            "insurance_penetration": insurance_penetration,
+                            "warranty_penetration": warranty_penetration,
+                            # Quality
+                            "nps": nps,
+                            "csat": csat,
+                            "avg_response_time": avg_response_time,
+                            "ownership_score": ownership_score,
+                            # Incentives
+                            "total_points": total_points,
+                            "level": level,
+                            # Capacity
+                            "slots_available_today": max(0, 8 - appointments_today),
+                            "slots_available_week": max(0, 40 - appointments_this_week),
+                        }
+                    )
+
+                    kavako_id += 1
+
+    return pd.DataFrame(kavakos)
