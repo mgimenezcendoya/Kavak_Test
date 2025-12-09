@@ -23,6 +23,7 @@ from utils.celeste_copilot import render_celeste_copilot
 from utils.components import (
     apply_custom_styles,
     render_alert_box,
+    render_global_filters,
     render_kpi_card,
     render_metric_comparison,
 )
@@ -63,6 +64,9 @@ else:
 
     # Render user info in sidebar
     render_user_info_sidebar()
+
+    # Render global filters (shared across management views)
+    render_global_filters()
 
     # Get filtered data based on user role
     filtered_data = get_filtered_data_for_user(st.session_state.data)

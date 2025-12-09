@@ -38,22 +38,25 @@ def render_city_manager_dashboard(data):
     # ═══════════════════════════════════════════════════════════════════
     # HEADER + FILTERS (Compact)
     # ═══════════════════════════════════════════════════════════════════
-    col_title, col_filters = st.columns([1, 3])
+    col_title, col_space = st.columns([1, 3])
 
     with col_title:
         st.markdown("## 👥 City Manager")
 
-    with col_filters:
-        render_filters_compact()
+    # Get filtered data from Global Filters
+    country = st.session_state.get("global_country", COUNTRIES[0])
+    region = st.session_state.get("global_region", "Todos")
 
-    # Get filtered data
-    country = st.session_state.get("cm_country", COUNTRIES[0])
-    region = st.session_state.get(
-        "cm_region", HUBS[country][0] if HUBS.get(country) else ""
-    )
-    hub = st.session_state.get("cm_hub", "Todos los Hubs")
-    period = st.session_state.get("cm_period", "Últimos 30 días")
-    operation_type = st.session_state.get("cm_operation_type", "all")
+    # Handle default region if not set
+    if region == "Todos" and country != "Todos" and HUBS.get(country):
+        # If global is 'Todos', CM dashboard might prefer a specific view, or handle 'Todos' as aggregate.
+        # Existing logic seemed to default to first region if not set.
+        # Let's respect "Todos" if supported by filter_data, otherwise default.
+        pass
+
+    hub = st.session_state.get("global_hub", "Todos los Hubs")
+    period = st.session_state.get("global_period", "Últimos 30 días")
+    operation_type = "all"
 
     filtered_data = filter_data(data, country, region, hub, period, operation_type)
     hub_label = f"{hub}" if hub != "Todos los Hubs" else f"{region}"
@@ -99,44 +102,6 @@ def render_city_manager_dashboard(data):
 
     else:  # Alertas
         render_alerts_section(filtered_data, hub_label)
-
-
-def render_filters_compact():
-    """Render compact filter controls in a single row"""
-    col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 1.5, 1.5, 0.5])
-
-    with col1:
-        selected_country = st.selectbox(
-            "País", COUNTRIES, key="cm_country", label_visibility="collapsed"
-        )
-
-    with col2:
-        country_regions = HUBS.get(selected_country, [])
-        st.selectbox(
-            "Región", country_regions, key="cm_region", label_visibility="collapsed"
-        )
-
-    with col3:
-        from config import REGIONS_HUBS
-
-        region = st.session_state.get("cm_region", "")
-        if selected_country and region in REGIONS_HUBS.get(selected_country, {}):
-            hub_options = ["Todos los Hubs"] + REGIONS_HUBS[selected_country][region]
-        else:
-            hub_options = ["Todos los Hubs"]
-        st.selectbox("Hub", hub_options, key="cm_hub", label_visibility="collapsed")
-
-    with col4:
-        st.selectbox(
-            "Periodo",
-            list(PERIOD_OPTIONS.keys()),
-            key="cm_period",
-            label_visibility="collapsed",
-        )
-
-    with col5:
-        if st.button("🔄", use_container_width=True, help="Actualizar datos"):
-            st.rerun()
 
 
 def render_hero_zone(all_data, filtered_data, hub_label, country):
@@ -197,7 +162,7 @@ def render_hero_zone(all_data, filtered_data, hub_label, country):
 
     with col1:
         st.metric(
-            "🚗 Entregas",
+            "Entregas",
             f"{total_sales:.0f}",
             f"{sales_delta:+.1f}% vs {country}",
             delta_color="normal" if sales_delta >= 0 else "inverse",
@@ -205,7 +170,7 @@ def render_hero_zone(all_data, filtered_data, hub_label, country):
 
     with col2:
         st.metric(
-            "🎯 Conversión",
+            "Conversión",
             f"{conversion:.1f}%",
             f"{conversion_delta:+.1f}pp vs {country}",
             delta_color="normal" if conversion_delta >= 0 else "inverse",
@@ -213,17 +178,17 @@ def render_hero_zone(all_data, filtered_data, hub_label, country):
 
     with col3:
         st.metric(
-            "⭐ NPS",
+            "NPS",
             f"{avg_nps:.0f}",
             f"{nps_delta:+.0f} vs {country}",
             delta_color="normal" if nps_delta >= 0 else "inverse",
         )
 
     with col4:
-        st.metric("💰 Revenue", f"${total_revenue:,.0f}")
+        st.metric("Revenue", f"${total_revenue:,.0f}")
 
     with col5:
-        st.metric("📊 Financing", f"{financing_penetration:.1f}%")
+        st.metric("Financing Penetration", f"{financing_penetration:.1f}%")
 
 
 def render_team_section(filtered_data, hub_label):
@@ -235,25 +200,19 @@ def render_team_section(filtered_data, hub_label):
         st.warning("No hay datos de agentes")
         return
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("👥 Total Agentes", len(agents_df))
+        st.metric("Total Agentes", len(agents_df))
 
     with col2:
         avg_util = agents_df["utilization"].mean() * 100
-        st.metric("📅 Utilización Prom.", f"{avg_util:.0f}%")
+        st.metric("Utilización Prom.", f"{avg_util:.0f}%")
 
     with col3:
         if "ownership_score" in agents_df.columns:
             avg_ownership = agents_df["ownership_score"].mean()
-            st.metric("🤝 Ownership Prom.", f"{avg_ownership:.0f}%")
-
-    with col4:
-        top_performers = len(
-            agents_df[agents_df["conversion"] > agents_df["conversion"].quantile(0.75)]
-        )
-        st.metric("🔥 Top Performers", top_performers)
+            st.metric("Ownership Prom.", f"{avg_ownership:.0f}%")
 
     st.markdown("---")
 

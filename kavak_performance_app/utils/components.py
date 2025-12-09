@@ -66,6 +66,7 @@ def apply_custom_styles():
             font-size: 1.25rem !important;
             font-weight: 600 !important;
             color: #334155 !important;
+            letter-spacing: -0.01em;
         }
 
         /* ═══════════════════════════════════════════════════════════════════
@@ -381,6 +382,16 @@ def apply_custom_styles():
     )
 
 
+def format_currency_compact(value):
+    """Format large currency values compactly (e.g. $1.5M, $899K)"""
+    if value >= 1_000_000:
+        return f"${value/1_000_000:.1f}M"
+    elif value >= 1_000:
+        return f"${value/1_000:.0f}K"
+    else:
+        return f"${value:.0f}"
+
+
 def render_kpi_card(label, value, delta=None, delta_color="normal", format_str=None):
     """
     Render a KPI metric card
@@ -590,3 +601,90 @@ def render_kpi_grid(kpis, columns=4):
                 delta_color=kpi.get("delta_color", "normal"),
                 format_str=kpi.get("format"),
             )
+
+
+def render_global_filters():
+    """
+    Render unified sidebar filters for all management views.
+    Uses 'global_' prefix for session state keys to share context.
+    """
+    from config import COUNTRIES, PERIOD_OPTIONS, REGIONS_HUBS
+
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 📊 Filtros Globales")
+
+        # 1. Country Selection
+        # Set default if not exists
+        if "global_country" not in st.session_state:
+            st.session_state.global_country = "Todos"
+
+        country_options = ["Todos"] + COUNTRIES
+        try:
+            country_index = country_options.index(st.session_state.global_country)
+        except ValueError:
+            country_index = 0
+
+        country = st.selectbox(
+            "País", country_options, index=country_index, key="global_country"
+        )
+
+        # 2. Region Selection
+        region_options = ["Todos"]
+        if country != "Todos":
+            region_list = list(REGIONS_HUBS.get(country, {}).keys())
+            region_options += region_list
+
+        # Ensure selected region is valid
+        if (
+            "global_region" not in st.session_state
+            or st.session_state.global_region not in region_options
+        ):
+            st.session_state.global_region = "Todos"
+
+        try:
+            region_index = region_options.index(st.session_state.global_region)
+        except ValueError:
+            region_index = 0
+
+        region = st.selectbox(
+            "Región", region_options, index=region_index, key="global_region"
+        )
+
+        # 3. Hub Selection
+        hub_options = ["Todos los Hubs"]
+        if country != "Todos" and region != "Todos":
+            if region in REGIONS_HUBS.get(country, {}):
+                hub_options += REGIONS_HUBS[country][region]
+
+        # Ensure selected hub is valid
+        if (
+            "global_hub" not in st.session_state
+            or st.session_state.global_hub not in hub_options
+        ):
+            st.session_state.global_hub = "Todos los Hubs"
+
+        try:
+            hub_index = hub_options.index(st.session_state.global_hub)
+        except ValueError:
+            hub_index = 0
+
+        hub = st.selectbox("Hub", hub_options, index=hub_index, key="global_hub")
+
+        # 4. Period Selection
+        period_options = list(PERIOD_OPTIONS.keys())
+        if "global_period" not in st.session_state:
+            st.session_state.global_period = "Últimos 30 días"
+
+        try:
+            period_index = period_options.index(st.session_state.global_period)
+        except ValueError:
+            period_index = 0
+
+        period = st.selectbox(
+            "Periodo", period_options, index=period_index, key="global_period"
+        )
+
+        st.markdown("---")
+        if st.button("🔄 Actualizar Todo", type="primary", use_container_width=True):
+            st.rerun()

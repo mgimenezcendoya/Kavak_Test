@@ -143,28 +143,28 @@ def render_hero_header(agent_data):
 
     with col1:
         st.metric(
-            "🚗 Entregas",
+            "Entregas",
             f"{agent_data['sales']:.0f}",
             f"{agent_data['sales'] - agent_data['hub_avg_sales']:+.0f}",
         )
 
     with col2:
         purchases = agent_data.get("purchases_total", 0)
-        st.metric("🔵 Compras", f"{purchases:.0f}")
+        st.metric("Compras", f"{purchases:.0f}")
 
     with col3:
         cvr = agent_data["conversion"] * 100
         cvr_delta = (agent_data["conversion"] - agent_data["hub_avg_conversion"]) * 100
-        st.metric("🎯 CVR", f"{cvr:.1f}%", f"{cvr_delta:+.1f}%")
+        st.metric("CVR", f"{cvr:.1f}%", f"{cvr_delta:+.1f}%")
 
     with col4:
         nps = agent_data["nps"]
         nps_delta = nps - agent_data["hub_avg_nps"]
-        st.metric("⭐ NPS", f"{nps:.0f}", f"{nps_delta:+.0f}")
+        st.metric("NPS", f"{nps:.0f}", f"{nps_delta:+.0f}")
 
     with col5:
         ownership = agent_data.get("ownership_score", 0)
-        st.metric("🤝 Ownership", f"{ownership:.0f}%")
+        st.metric("Ownership", f"{ownership:.0f}%")
 
 
 def render_todays_focus(agent_data, data):

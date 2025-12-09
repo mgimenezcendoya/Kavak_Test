@@ -24,31 +24,31 @@ def render_ceo_dashboard(data):
     """
     Render the CEO Executive Dashboard
     """
-    st.header("📊 Executive Dashboard")
-    st.markdown("Visión macro del negocio por país / hub")
+    st.header("Executive Dashboard")
+    # Visión macro removida para diseño más limpio
 
-    # Filters
-    render_filters()
+    # Filters (Managed Globally in Sidebar)
+    # render_filters() removed
 
-    # Get filtered data
+    # Get filtered data using global keys
     filtered_data = filter_data(
         data,
-        st.session_state.get("ceo_country", "Todos"),
-        st.session_state.get("ceo_region", "Todos"),
-        st.session_state.get("ceo_hub", "Todos los Hubs"),
-        st.session_state.get("ceo_period", "Últimos 30 días"),
+        st.session_state.get("global_country", "Todos"),
+        st.session_state.get("global_region", "Todos"),
+        st.session_state.get("global_hub", "Todos los Hubs"),
+        st.session_state.get("global_period", "Últimos 30 días"),
     )
 
     # KPI Section
-    st.markdown("---")
     render_kpi_section(filtered_data)
 
-    # Hub Comparison Section
-    st.markdown("---")
-    country_filter = st.session_state.get("ceo_country", "Todos")
-    hub_filter = st.session_state.get("ceo_hub", "Todos")
-    if hub_filter == "Todos":  # Only show comparison when viewing multiple hubs
-        render_hub_comparison_section(filtered_data, country_filter)
+    # Hub Comparison Section (Temporarily Hidden)
+    # st.markdown("---")
+    country_filter = st.session_state.get("global_country", "Todos")
+    # hub_filter = st.session_state.get("global_hub", "Todos los Hubs")
+
+    # if hub_filter == "Todos los Hubs":  # Only show comparison when viewing multiple hubs
+    #     render_hub_comparison_section(filtered_data, country_filter)
 
     # Performance Table Section (NEW - Collapsible)
     st.markdown("---")
@@ -56,43 +56,10 @@ def render_ceo_dashboard(data):
 
     # Alerts Section (Dynamic)
     st.markdown("---")
-    period_days = PERIOD_OPTIONS[st.session_state.get("ceo_period", "Últimos 30 días")]
+    period_days = PERIOD_OPTIONS[
+        st.session_state.get("global_period", "Últimos 30 días")
+    ]
     render_alerts_section(data, period_days)
-
-
-def render_filters():
-    """Render filter controls"""
-    col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 1])
-
-    with col1:
-        country_options = ["Todos"] + COUNTRIES
-        country = st.selectbox("País", country_options, key="ceo_country")
-
-    with col2:
-        if country != "Todos":
-            region_options = ["Todos"] + HUBS.get(country, [])
-        else:
-            region_options = ["Todos"]
-
-        region = st.selectbox("Región", region_options, key="ceo_region")
-
-    with col3:
-        # Get hubs for selected region from REGIONS_HUBS
-        from config import REGIONS_HUBS
-
-        hub_options = ["Todos los Hubs"]
-        if country != "Todos" and region != "Todos":
-            if region in REGIONS_HUBS.get(country, {}):
-                hub_options = ["Todos los Hubs"] + REGIONS_HUBS[country][region]
-
-        hub = st.selectbox("Hub", hub_options, key="ceo_hub")
-
-    with col4:
-        period = st.selectbox("Periodo", list(PERIOD_OPTIONS.keys()), key="ceo_period")
-
-    with col5:
-        if st.button("🔄 Actualizar", use_container_width=True):
-            st.rerun()
 
 
 def filter_data(data, country, region, hub, period):
@@ -252,7 +219,7 @@ def render_kpi_section(filtered_data):
         prev_pc1_minus_ecac = pc1_minus_ecac
 
     # 1. FINANCIEROS
-    st.subheader("💰 Financieros")
+    # st.subheader("💰 Financieros") (Removed by request)
 
     # KPIs en una sola fila con separadores visuales entre secciones
     col1, col2, sep1, col3, col4, col5, sep2, col6, col7, col8 = st.columns(
@@ -307,9 +274,31 @@ def render_kpi_section(filtered_data):
         delta_pc1_ecac = calculate_delta(pc1_minus_ecac, prev_pc1_minus_ecac)
         st.metric("PC1 - eCAC", f"${pc1_minus_ecac:,.0f}", delta_pc1_ecac)
 
-    # 2. SALUD DE LA DEMANDA
+    # 2. EXPERIENCIA DE CLIENTE
     st.markdown("---")
-    st.subheader("📈 Salud de la Demanda")
+    st.subheader("Experiencia de Cliente")
+
+    # Mock NPS breakdowns (Buyer/Seller/Relational) based on avg_nps
+    nps_buyer = avg_nps + 2  # Buyers usually happier
+    nps_seller = avg_nps - 3  # Sellers often more critical on price
+    nps_relational = avg_nps  # Proxy
+
+    cx_kpis = [
+        {"label": "NPS Promedio", "value": avg_nps, "format": "%.0f", "delta": None},
+        {"label": "NPS Buyer", "value": nps_buyer, "format": "%.0f", "delta": None},
+        {"label": "NPS Seller", "value": nps_seller, "format": "%.0f", "delta": None},
+        {
+            "label": "NPS Relacional",
+            "value": nps_relational,
+            "format": "%.0f",
+            "delta": None,
+        },
+    ]
+    render_kpi_grid(cx_kpis, columns=4)
+
+    # 3. EFICIENCIA COMERCIAL
+    st.markdown("---")
+    st.subheader("Eficiencia Comercial")
 
     demand_kpis = [
         {
@@ -334,31 +323,9 @@ def render_kpi_section(filtered_data):
     ]
     render_kpi_grid(demand_kpis, columns=3)
 
-    # 3. EXPERIENCIA DE CLIENTE
-    st.markdown("---")
-    st.subheader("😊 Experiencia de Cliente")
-
-    # Mock NPS breakdowns (Buyer/Seller/Relational) based on avg_nps
-    nps_buyer = avg_nps + 2  # Buyers usually happier
-    nps_seller = avg_nps - 3  # Sellers often more critical on price
-    nps_relational = avg_nps  # Proxy
-
-    cx_kpis = [
-        {"label": "NPS Promedio", "value": avg_nps, "format": "%.0f", "delta": None},
-        {"label": "NPS Buyer", "value": nps_buyer, "format": "%.0f", "delta": None},
-        {"label": "NPS Seller", "value": nps_seller, "format": "%.0f", "delta": None},
-        {
-            "label": "NPS Relacional",
-            "value": nps_relational,
-            "format": "%.0f",
-            "delta": None,
-        },
-    ]
-    render_kpi_grid(cx_kpis, columns=4)
-
     # 4. OPERACIÓN / EFICIENCIA
     st.markdown("---")
-    st.subheader("⚙️ Operación / Eficiencia")
+    # st.subheader("⚙️ Operación / Eficiencia")
 
     # Calculate inventory metrics
     inventory_df = filtered_data.get("inventory", pd.DataFrame())
@@ -384,39 +351,8 @@ def render_kpi_section(filtered_data):
         aged_inventory = avg_days_in_inv = inventory_velocity = 0
         backlog_inventory = 0
 
-    # ROW 1: INVENTORY COMPOSITION (The "Stock Flow")
-    st.markdown("##### 📦 Composición de Inventario")
-
-    # Calculate percentages
-    disponible_pct = (
-        (available_inventory / total_inventory * 100) if total_inventory > 0 else 0
-    )
-    reservado_pct = (
-        (reserved_inventory / total_inventory * 100) if total_inventory > 0 else 0
-    )
-    backlog_pct = (
-        (backlog_inventory / total_inventory * 100) if total_inventory > 0 else 0
-    )
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("Inventario Total", f"{total_inventory:.0f}")
-
-    with col2:
-        st.metric("Disponible", f"{available_inventory:.0f}")
-        st.caption(f"**{disponible_pct:.1f}%** del total")
-
-    with col3:
-        st.metric("Reservado", f"{reserved_inventory:.0f}")
-        st.caption(f"**{reservado_pct:.1f}%** del total")
-
-    with col4:
-        st.metric("Backlog (Prep/WIP)", f"{backlog_inventory:.0f}")
-        st.caption(f"**{backlog_pct:.1f}%** del total")
-
-    # ROW 2: OPERATIONAL EFFICIENCY
-    st.markdown("##### ⚡ Eficiencia Operativa")
+    # ROW 1: OPERATIONAL EFFICIENCY
+    st.markdown("##### Eficiencia Operativa")
 
     aging_pct = (aged_inventory / total_inventory * 100) if total_inventory > 0 else 0
 
@@ -449,6 +385,37 @@ def render_kpi_section(filtered_data):
         },
     ]
     render_kpi_grid(ops_kpis, columns=4)
+
+    # ROW 2: INVENTORY COMPOSITION (The "Stock Flow")
+    st.markdown("##### Composición de Inventario")
+
+    # Calculate percentages
+    disponible_pct = (
+        (available_inventory / total_inventory * 100) if total_inventory > 0 else 0
+    )
+    reservado_pct = (
+        (reserved_inventory / total_inventory * 100) if total_inventory > 0 else 0
+    )
+    backlog_pct = (
+        (backlog_inventory / total_inventory * 100) if total_inventory > 0 else 0
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Inventario Total", f"{total_inventory:.0f}")
+
+    with col2:
+        st.metric("Disponible", f"{available_inventory:.0f}")
+        st.caption(f"**{disponible_pct:.1f}%** del total")
+
+    with col3:
+        st.metric("Reservado", f"{reserved_inventory:.0f}")
+        st.caption(f"**{reservado_pct:.1f}%** del total")
+
+    with col4:
+        st.metric("Backlog (Prep/WIP)", f"{backlog_inventory:.0f}")
+        st.caption(f"**{backlog_pct:.1f}%** del total")
 
 
 def render_hub_comparison_section(filtered_data, country_filter):
