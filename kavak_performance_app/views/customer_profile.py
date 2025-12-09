@@ -323,7 +323,7 @@ def render_customer_search_improved(data):
 
     quick_filter = st.radio(
         "Filtro rápido",
-        ["Todos", "🔥 Hot Leads", "⭐ VIP", "📅 Contactar Hoy", "🔄 Retomar"],
+        ["Todos", "📅 Contactar Hoy", "🔄 Retomar"],
         horizontal=True,
         key="quick_filter",
         label_visibility="collapsed",
@@ -373,11 +373,7 @@ def render_customer_search_improved(data):
         ]
 
     # Quick filters
-    if quick_filter == "🔥 Hot Leads":
-        filtered = filtered[filtered["customer_score"] >= 70]
-    elif quick_filter == "⭐ VIP":
-        filtered = filtered[filtered["is_vip"] == True]
-    elif quick_filter == "📅 Contactar Hoy":
+    if quick_filter == "📅 Contactar Hoy":
         today = datetime.now()
         filtered = filtered[(today - filtered["last_interaction_date"]).dt.days >= 7]
     elif quick_filter == "🔄 Retomar":

@@ -975,7 +975,7 @@ def render_agent_optimization(filtered_data):
 
 def render_incentives_module(filtered_data):
     """Render unified gamification and incentives module with composite points"""
-    st.subheader("🏆 Sistema de Incentivos Unificado")
+    st.subheader("Sistema de Incentivos Unificado")
     st.caption(
         "Puntos compuestos basados en entregas, productos adicionales y ownership"
     )
@@ -1023,7 +1023,7 @@ def render_unified_incentives_view(agents_df):
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
-        st.markdown("#### 📊 Ranking Unificado (Puntos + Ownership)")
+        st.markdown("#### Ranking Unificado")
 
         # Sort by total points (All agents)
         leaderboard = agents_df.sort_values("total_points", ascending=False)
@@ -1089,7 +1089,7 @@ def render_unified_incentives_view(agents_df):
         st.markdown("---")
 
         # 2. Top Ownership (Solo Top 3 y compacto)
-        st.markdown("#### 🤝 Top 3 Ownership")
+        st.markdown("#### Top 3 Ownership")
         top_ownership = agents_df.sort_values("ownership_score", ascending=False).head(
             3
         )
@@ -1196,7 +1196,7 @@ def render_recommendations_module(filtered_data):
 
 def render_operational_alerts(filtered_data, hub_label):
     """Render operational alerts with dynamic detection - collapsible by type"""
-    st.subheader("🚨 Alertas Operativas")
+    st.subheader("Alertas Operativas")
 
     # Detect alerts dynamically
     alerts = detect_operational_alerts(filtered_data, hub_label)
@@ -1214,15 +1214,15 @@ def render_operational_alerts(filtered_data, hub_label):
     # Display alert summary
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("🚨 Críticas", len(critical_alerts))
+        st.metric("Críticas", len(critical_alerts))
     with col2:
-        st.metric("⚠️ Advertencias", len(warning_alerts))
+        st.metric("Advertencias", len(warning_alerts))
 
     st.markdown("---")
 
     # Render critical alerts in expandable section
     if critical_alerts:
-        with st.expander(f"🚨 **Críticas** ({len(critical_alerts)})", expanded=False):
+        with st.expander(f"**Críticas** ({len(critical_alerts)})", expanded=False):
             for alert in critical_alerts:
                 render_alert_box(
                     alert["type"],
@@ -1233,9 +1233,7 @@ def render_operational_alerts(filtered_data, hub_label):
 
     # Render warning alerts in expandable section
     if warning_alerts:
-        with st.expander(
-            f"⚠️ **Advertencias** ({len(warning_alerts)})", expanded=False
-        ):
+        with st.expander(f"**Advertencias** ({len(warning_alerts)})", expanded=False):
             for alert in warning_alerts:
                 render_alert_box(
                     alert["type"],
@@ -1370,7 +1368,7 @@ def render_lead_assignment_simulator(filtered_data):
     c_left, c_right = st.columns([2, 1])
 
     with c_left:
-        st.markdown("#### 📋 Distribución Propuesta")
+        st.markdown("#### Distribución Propuesta")
         if not assignments_df.empty:
             display_df = assignments_df[
                 ["agent", "leads", "efficiency", "expected_revenue"]

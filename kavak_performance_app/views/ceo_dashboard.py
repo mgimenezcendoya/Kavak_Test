@@ -387,6 +387,7 @@ def render_kpi_section(filtered_data):
     render_kpi_grid(ops_kpis, columns=4)
 
     # ROW 2: INVENTORY COMPOSITION (The "Stock Flow")
+    st.markdown("---")
     st.markdown("##### Composición de Inventario")
 
     # Calculate percentages
@@ -973,7 +974,7 @@ def render_performance_table_section(data, country_filter):
     # === RENDER IN EXPANDER ===
     level_label = "regiones" if aggregation_level == "Por Región" else "hubs"
     with st.expander(
-        f"📊 Ver tabla detallada ({len(display_df)} {level_label})",
+        f"Ver tabla detallada ({len(display_df)} {level_label})",
         expanded=False,
     ):
         # Summary metrics at top
@@ -1059,7 +1060,7 @@ def render_performance_table_section(data, country_filter):
 
 def render_alerts_section(data, period_days):
     """Render strategic alerts with dynamic detection - collapsible by type"""
-    st.subheader("🚨 Alertas Estratégicas")
+    st.subheader("Alertas Estratégicas")
 
     # Detect alerts dynamically
     alerts = detect_strategic_alerts(data, period_days)
@@ -1076,17 +1077,17 @@ def render_alerts_section(data, period_days):
     # Display alert summary
     col_summary1, col_summary2, col_summary3 = st.columns(3)
     with col_summary1:
-        st.metric("🚨 Críticas", len(critical_alerts))
+        st.metric("Críticas", len(critical_alerts))
     with col_summary2:
-        st.metric("⚠️ Advertencias", len(warning_alerts))
+        st.metric("Advertencias", len(warning_alerts))
     with col_summary3:
-        st.metric("ℹ️ Información", len(info_alerts))
+        st.metric("Información", len(info_alerts))
 
     st.markdown("---")
 
     # Render critical alerts in expandable section
     if critical_alerts:
-        with st.expander(f"🚨 **Críticas** ({len(critical_alerts)})", expanded=False):
+        with st.expander(f"**Críticas** ({len(critical_alerts)})", expanded=False):
             col1, col2 = st.columns(2)
 
             for idx, alert in enumerate(critical_alerts):
@@ -1102,9 +1103,7 @@ def render_alerts_section(data, period_days):
 
     # Render warning alerts in expandable section
     if warning_alerts:
-        with st.expander(
-            f"⚠️ **Advertencias** ({len(warning_alerts)})", expanded=False
-        ):
+        with st.expander(f"**Advertencias** ({len(warning_alerts)})", expanded=False):
             col1, col2 = st.columns(2)
 
             for idx, alert in enumerate(warning_alerts):
