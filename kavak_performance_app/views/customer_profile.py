@@ -65,24 +65,12 @@ def render_customer_profile(data):
     render_hero_brief(customer_info)
 
     # ═══════════════════════════════════════════════════════════════════
-    # ACTION BAR - Quick actions
-    # ═══════════════════════════════════════════════════════════════════
-    st.markdown("---")
-    render_action_bar(customer_info)
-
-    # ═══════════════════════════════════════════════════════════════════
-    # TABS - Reordered by frequency of use
+    # TABS - Simplified: 3 tabs (Context, Interest, History)
     # ═══════════════════════════════════════════════════════════════════
     st.markdown("---")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        [
-            "📱 Contexto Celeste",
-            "🚗 Vehículos",
-            "🛒 Historial",
-            "📞 Interacciones",
-            "📊 Resumen",
-        ]
+    tab1, tab2, tab3 = st.tabs(
+        ["💬 Contexto & Objeciones", "🚗 Interés & Vehículos", "📋 Historial Completo"]
     )
 
     with tab1:
@@ -93,16 +81,16 @@ def render_customer_profile(data):
 
     with tab3:
         render_transaction_history(customer_info)
-
-    with tab4:
+        st.markdown("---")
+        st.markdown("#### 📞 Log de Interacciones")
         render_interactions_log(customer_info)
-
-    with tab5:
-        render_customer_summary(customer_info, data)
 
 
 def render_hero_brief(customer_info):
-    """Render Hero Brief - The first thing agent sees (using native Streamlit)"""
+    """
+    Render Hero Brief - Organized 'Battle Card' Layout
+    Integrates key info and actions in one view
+    """
     # Get data
     celeste_summary = customer_info.get("celeste_summary", "")
     budget = customer_info.get("celeste_budget_range", "No especificado")
@@ -110,105 +98,111 @@ def render_hero_brief(customer_info):
     tradein = customer_info.get("celeste_tradein_info")
     vehicles = customer_info.get("celeste_vehicles_shown", [])
     objections = customer_info.get("celeste_main_objections", [])
-    recommendations = customer_info.get("celeste_recommendations", [])
     score = customer_info["customer_score"]
-    vip_badge = " ⭐ VIP" if customer_info["is_vip"] else ""
+    vip_badge = " ⭐ VIP" if customer_info.get("is_vip") else ""
 
-    # Score emoji
-    score_emoji = "🟢" if score >= 70 else "🟡" if score >= 50 else "🔴"
-
-    # Header row
-    col_info, col_score = st.columns([4, 1])
-
-    with col_info:
+    # 1. Header: Name & Score & Next Action
+    c1, c2 = st.columns([3, 1])
+    with c1:
         st.markdown(f"## 👤 {customer_info['customer_name']}{vip_badge}")
-        st.caption(
-            f"{customer_info['customer_id']} • {customer_info['hub']}, {customer_info['country']}"
+        st.caption(f"{customer_info['customer_id']} • {customer_info['hub']}")
+    with c2:
+        score_color = (
+            "#2e7d32" if score >= 70 else "#f57c00" if score >= 50 else "#c62828"
+        )
+        st.markdown(
+            f"""
+            <div style="text-align: right;">
+                <h3 style='color:{score_color};margin:0'>{score}/100</h3>
+                <small style="color:gray">Sentinel Score</small>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-    with col_score:
-        st.metric("Sentinel Score", f"{score_emoji} {score}/100")
-
-    # Summary
-    if celeste_summary:
-        st.info(f"💬 **{celeste_summary}**")
-
-    # Key facts in metrics
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("💰 Presupuesto", budget)
-
-    with col2:
-        financing_text = (
-            f"{financing.get('months', 0)} meses"
-            if financing and financing.get("interested")
-            else "Contado"
-        )
-        st.metric("📋 Financiamiento", financing_text)
-
-    with col3:
-        tradein_text = (
-            f"{tradein['brand']} {tradein['model']}" if tradein else "No tiene"
-        )
-        st.metric("🔄 Trade-in", tradein_text)
-
-    with col4:
-        obj_count = len(objections) if objections else 0
-        st.metric("⚠️ Objeciones", f"{obj_count} registradas")
-
-    # Favorite vehicle highlight
-    if vehicles:
-        fav = vehicles[0]
-        st.markdown("---")
-
-        col_car, col_loc = st.columns([3, 1])
-
-        with col_car:
-            st.success(
-                f"🚗 **VEHÍCULO FAVORITO:** {fav['brand']} {fav['model']} {fav['year']} - ${fav['price']:,}"
-            )
-
-        with col_loc:
-            st.success(f"📍 **Lote {fav['lote']}**")
-
-    # Recommendations strip
-    if recommendations:
-        st.markdown("---")
-        st.markdown("**💡 Recomendaciones para ti:**")
-        cols = st.columns(min(len(recommendations), 3))
-        for idx, rec in enumerate(recommendations[:3]):
-            with cols[idx]:
-                st.success(f"✅ {rec}")
-
-    # Celeste Copilot Quick Insight Card
     st.markdown("---")
-    render_celeste_insights_card(customer_info)
 
+    # 2. Split Layout: Context (Left) vs Focus (Right)
+    col_left, col_right = st.columns([1.2, 1])
 
-def render_action_bar(customer_info):
-    """Render quick action buttons"""
-    col1, col2, col3, col4 = st.columns(4)
+    with col_left:
+        st.markdown("#### 📋 Ficha Técnica")
 
-    with col1:
-        if st.button("📞 Llamar", use_container_width=True, type="primary"):
-            st.info(f"📱 {customer_info['phone']}")
+        # Key Metrics Grid
+        m1, m2 = st.columns(2)
+        with m1:
+            st.metric("💰 Presupuesto", budget)
+        with m2:
+            financing_text = (
+                f"{financing.get('months', 0)} meses"
+                if financing.get("interested")
+                else "Contado"
+            )
+            st.metric("💳 Financiamiento", financing_text)
 
-    with col2:
-        if st.button("💬 WhatsApp", use_container_width=True):
-            st.info(f"Abrir WhatsApp: {customer_info['phone']}")
+        m3, m4 = st.columns(2)
+        with m3:
+            tradein_text = f"{tradein['brand']} {tradein['model']}" if tradein else "No"
+            st.metric("🔄 Trade-in", tradein_text)
+        with m4:
+            st.metric("📅 Visitas", customer_info.get("num_visits", 0))
 
-    with col3:
-        if st.button("📧 Email", use_container_width=True):
-            st.info(f"📧 {customer_info['email']}")
+        # Celeste Summary
+        if celeste_summary:
+            st.info(f"💬 **Resumen:** {celeste_summary}")
 
-    with col4:
-        vehicles = customer_info.get("celeste_vehicles_shown", [])
+    with col_right:
+        st.markdown("#### 🎯 Foco Principal")
+
+        # Vehicle Card
         if vehicles:
-            if st.button("📍 Ubicar Auto", use_container_width=True):
-                st.success(f"📍 Ir a Lote {vehicles[0]['lote']}")
+            fav = vehicles[0]
+            st.markdown(
+                f"""
+                <div style="padding:15px; border:1px solid #e0e0e0; border-radius:8px; background-color:#f8f9fa;">
+                    <div style="color:#666; font-size:11px; font-weight:bold; letter-spacing:1px;">VEHÍCULO DE INTERÉS</div>
+                    <div style="font-size:18px; font-weight:bold; color:#0B4FD6; margin-top:5px;">{fav['brand']} {fav['model']}</div>
+                    <div style="font-size:14px; color:#333;">{fav['year']} • ${fav['price']:,}</div>
+                    <div style="margin-top:10px; font-size:12px; font-weight:bold; color:#555;">📍 Ubicación: Lote {fav['lote']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
-            st.button("📍 Sin auto", use_container_width=True, disabled=True)
+            st.warning("Sin vehículo de interés definido")
+
+        # Top Objections
+        if objections:
+            st.markdown("<div style='margin-top:15px'></div>", unsafe_allow_html=True)
+            for obj in objections[:2]:
+                st.warning(f"⚠️ {obj}")
+
+    # 3. Action Bar (Compact & Integrated)
+    st.markdown("---")
+
+    c_acts = st.columns(4)
+    with c_acts[0]:
+        if st.button(
+            "📞 Llamar", key="hero_call", use_container_width=True, type="primary"
+        ):
+            st.toast(f"Llamando a {customer_info['phone']}")
+    with c_acts[1]:
+        if st.button("💬 WhatsApp", key="hero_wa", use_container_width=True):
+            st.toast("Abriendo WhatsApp...")
+    with c_acts[2]:
+        if st.button("📧 Email", key="hero_email", use_container_width=True):
+            st.toast(f"Email a {customer_info['email']}")
+    with c_acts[3]:
+        # Locate car logic
+        has_car = len(vehicles) > 0
+        if st.button(
+            "📍 Ubicar Auto",
+            key="hero_locate",
+            use_container_width=True,
+            disabled=not has_car,
+        ):
+            if has_car:
+                st.toast(f"📍 Lote {vehicles[0]['lote']}")
 
 
 def render_celeste_context_improved(customer_info):

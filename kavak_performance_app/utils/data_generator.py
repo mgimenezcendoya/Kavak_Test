@@ -622,6 +622,14 @@ def generate_agent_performance():
                 # Bonus por NPS alto (si NPS >= 80, +25 pts por entrega)
                 nps_bonus = (sales * 25) if nps_personal >= 80 else 0
 
+                # Bonus por Ownership Score (Punta a Punta)
+                # +40 pts por entrega si Ownership >= 90%, +20 pts si >= 80%
+                ownership_points = 0
+                if ownership_score >= 90:
+                    ownership_points = int(sales * 40)
+                elif ownership_score >= 80:
+                    ownership_points = int(sales * 20)
+
                 # Total de puntos
                 total_points = (
                     base_points
@@ -630,6 +638,7 @@ def generate_agent_performance():
                     + insurance_points
                     + tradein_points
                     + nps_bonus
+                    + ownership_points
                 )
 
                 # Puntos promedio por entrega
@@ -745,6 +754,7 @@ def generate_agent_performance():
                         "insurance_points": insurance_points,
                         "tradein_points": tradein_points,
                         "nps_bonus": nps_bonus,
+                        "ownership_points": ownership_points,
                         "total_points": total_points,
                         "points_per_delivery": points_per_delivery,
                         "incentive_level": incentive_level,

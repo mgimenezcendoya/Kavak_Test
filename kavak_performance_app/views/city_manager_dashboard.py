@@ -339,49 +339,58 @@ def render_agent_table_improved(filtered_data):
 
 
 def render_agent_card(agent, rank):
-    """Render a single agent card with key metrics"""
+    """Render a single agent card with key metrics - LEAN DESIGN"""
     # Determine level badge
     level = agent.get("incentive_level", "🥉 Bronze")
     ownership = agent.get("ownership_score", 0)
 
+    # Parse level for display
+    if " " in level:
+        level_icon, level_text = level.split(" ", 1)
+    else:
+        level_icon, level_text = "🏅", level
+
     # Status color based on performance
     cvr = agent["conversion"] * 100
-    if cvr >= 18:
-        status_color = "🟢"
-    elif cvr >= 12:
-        status_color = "🟡"
-    else:
-        status_color = "🔴"
+    status_emoji = "🟢" if cvr >= 18 else "🟡" if cvr >= 12 else "🔴"
 
-    # Create card
+    # Create card layout
     with st.container():
-        col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2.5, 1, 1, 1, 1.5])
+        col1, col2, col3, col4, col5, col6 = st.columns([0.4, 2.6, 1, 1, 1, 1.2])
 
         with col1:
-            st.markdown(f"**#{rank}**")
+            st.markdown(f"### #{rank}")
 
         with col2:
-            st.markdown(f"**{agent['agent_name']}** {level}")
-            if ownership > 0:
-                st.progress(ownership / 100, text=f"Ownership: {ownership:.0f}%")
+            st.markdown(f"**{agent['agent_name']}** {level_icon} {level_text}")
+            st.caption(f"Ownership: {ownership:.0f}%")
+            st.progress(ownership / 100)
 
         with col3:
-            st.metric("Entregas", f"{agent['sales']:.0f}", label_visibility="collapsed")
-            st.caption("Entregas")
+            st.markdown(
+                f"<div style='text-align:center'><span style='font-size:20px;font-weight:bold'>{agent['sales']:.0f}</span><br><span style='font-size:12px;color:grey'>Entregas</span></div>",
+                unsafe_allow_html=True,
+            )
 
         with col4:
-            st.metric("CVR", f"{cvr:.1f}%", label_visibility="collapsed")
-            st.caption(f"{status_color} CVR")
+            st.markdown(
+                f"<div style='text-align:center'><span style='font-size:20px;font-weight:bold'>{cvr:.1f}%</span><br><span style='font-size:12px;color:grey'>{status_emoji} CVR</span></div>",
+                unsafe_allow_html=True,
+            )
 
         with col5:
-            st.metric("NPS", f"{agent['nps']:.0f}", label_visibility="collapsed")
-            st.caption("NPS")
+            st.markdown(
+                f"<div style='text-align:center'><span style='font-size:20px;font-weight:bold'>{agent['nps']:.0f}</span><br><span style='font-size:12px;color:grey'>NPS</span></div>",
+                unsafe_allow_html=True,
+            )
 
         with col6:
+            st.write("")  # Vertical spacer
             if st.button(
                 "👁️ Ver Perfil",
                 key=f"view_agent_{agent['agent_id']}_{rank}",
                 use_container_width=True,
+                type="primary",
             ):
                 st.session_state.navigation_view = "agent_profile"
                 st.session_state.selected_agent_name = agent["agent_name"]
@@ -394,7 +403,7 @@ def render_agent_card(agent, rank):
                 st.rerun()
 
         st.markdown(
-            "<hr style='margin: 0.3rem 0; border: none; border-top: 1px solid #e0e0e0;'>",
+            "<hr style='margin: 0.5rem 0; border: none; border-top: 1px solid #f0f0f0;'>",
             unsafe_allow_html=True,
         )
 
@@ -833,54 +842,62 @@ def render_agent_advanced_filter(filtered_data):
     st.markdown("💡 *Haz clic en 'Ver Perfil' para ver detalles del agente*")
 
     # Create display dataframe for table
+    # Agent list with Lean Design
     for idx, (_, agent) in enumerate(filtered_agents.iterrows()):
-        # Create a single row with all metrics and button - more compact columns
-        col1, col2, col3, col4, col5, col6 = st.columns([2.5, 1, 1, 1, 1.2, 1.8])
+        # Determine level badge
+        level = agent.get("incentive_level", "Bronze")
+        level_icon = (
+            "💎"
+            if "Diamond" in level
+            else "🥇"
+            if "Gold" in level
+            else "🥈"
+            if "Silver" in level
+            else "🥉"
+        )
 
-        with col1:
-            # Agent name with ranking - smaller text
-            st.markdown(f"**#{idx + 1} - {agent['agent_name']}**")
+        # Compact Layout: Rank | Name | Metrics | Ownership | Button
+        c_rank, c_name, c_metrics, c_own, c_action = st.columns([0.5, 3, 3, 2.5, 1.2])
 
-        with col2:
+        with c_rank:
             st.markdown(
-                f"<div style='text-align: center;'><h3 style='margin:0;'>{agent['sales']:.0f}</h3><small style='color: gray;'>ENTREGAS</small></div>",
+                f"<div style='padding-top:10px'><b>#{idx + 1}</b></div>",
                 unsafe_allow_html=True,
             )
 
-        with col3:
+        with c_name:
+            st.markdown(f"**{agent['agent_name']}**")
+            st.caption(f"{level_icon} {level.split()[-1]} • {agent['status']}")
+
+        with c_metrics:
+            # Inline metrics grid
+            cvr_val = agent["conversion"] * 100
             st.markdown(
-                f"<div style='text-align: center;'><h3 style='margin:0;'>{agent['conversion']*100:.1f}%</h3><small style='color: gray;'>CVR</small></div>",
+                f"""
+                <div style="display: flex; gap: 20px; font-size: 13px; padding-top:5px;">
+                    <div>🚗 <b>{agent['sales']:.0f}</b> <span style="color:gray">Entregas</span></div>
+                    <div>🎯 <b>{cvr_val:.1f}%</b> <span style="color:gray">CVR</span></div>
+                    <div>⭐ <b>{agent['nps']:.0f}</b> <span style="color:gray">NPS</span></div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
 
-        with col4:
-            st.markdown(
-                f"<div style='text-align: center;'><h3 style='margin:0;'>{agent['nps']:.0f}</h3><small style='color: gray;'>NPS</small></div>",
-                unsafe_allow_html=True,
-            )
+        with c_own:
+            own_score = agent.get("ownership_score", 0)
+            st.caption(f"Ownership: {own_score:.0f}%")
+            st.progress(min(own_score / 100, 1.0))
 
-        with col5:
-            st.markdown(
-                f"<div style='text-align: center;'><h3 style='margin:0;'>{agent['leads']:.0f}</h3><small style='color: gray;'>LEADS</small></div>",
-                unsafe_allow_html=True,
-            )
-
-        with col6:
-            # Status badge and button - more compact
-            st.markdown(
-                f"<small>Estado: {agent['status']}</small>", unsafe_allow_html=True
-            )
+        with c_action:
             if st.button(
-                "👁️ Ver Perfil Completo",
-                key=f"profile_filtered_{agent['agent_name']}_{idx}",
+                "Ver ↗",
+                key=f"view_{agent['agent_name']}_{idx}",
                 use_container_width=True,
             ):
-                # Set navigation state - now navigates to unified kavako dashboard
+                # Navigation logic (preserved)
                 st.session_state.navigation_view = "agent_profile"
                 st.session_state.selected_agent_name = agent["agent_name"]
-                # Also set the kavako_agent for compatibility with the kavako dashboard
                 st.session_state.kavako_agent = agent["agent_name"]
-                # Find and set the hub for the agent
                 st.session_state.kavako_hub_selector = agent.get(
                     "hub", agent.get("region", "")
                 )
@@ -890,10 +907,10 @@ def render_agent_advanced_filter(filtered_data):
                 ]
                 st.rerun()
 
-        # Add separator between agents - thinner
+        # Minimal separator
         if idx < len(filtered_agents) - 1:
             st.markdown(
-                "<hr style='margin: 0.5rem 0; border: none; border-top: 1px solid #e0e0e0;'>",
+                "<hr style='margin: 0.2rem 0; border: none; border-bottom: 1px solid #f0f0f0;'>",
                 unsafe_allow_html=True,
             )
 
@@ -996,79 +1013,6 @@ def render_agent_optimization(filtered_data):
         else:
             st.success("✅ Todos los agentes bien utilizados")
 
-    st.markdown("---")
-
-    # === SECCIÓN 3: CALIDAD DEL STOCK ASIGNADO ===
-    st.markdown("### 🚗 Calidad del Stock Asignado")
-
-    col3, col4 = st.columns(2)
-
-    with col3:
-        # Tabla de stock
-        stock_df = agents_df[
-            [
-                "agent_name",
-                "stock_assigned",
-                "stock_avg_age",
-                "stock_attractiveness",
-                "lead_match_score",
-            ]
-        ].copy()
-
-        stock_df = stock_df.sort_values("stock_attractiveness", ascending=False)
-
-        stock_display = stock_df.copy()
-        stock_display.columns = [
-            "Agente",
-            "Autos Asignados",
-            "Edad Promedio (días)",
-            "Atractivo",
-            "Match con Leads",
-        ]
-
-        # Style by stock attractiveness
-        def style_stock(row):
-            attr = row["Atractivo"]
-            if attr >= 75:
-                return ["background-color: #c8e6c9"] * len(row)
-            elif attr < 60:
-                return ["background-color: #ffccbc"] * len(row)
-            else:
-                return [""] * len(row)
-
-        styled_stock = stock_display.style.apply(style_stock, axis=1).format(
-            {
-                "Autos Asignados": "{:.0f}",
-                "Edad Promedio (días)": "{:.0f}",
-                "Atractivo": "{:.0f}/100",
-                "Match con Leads": "{:.0f}/100",
-            }
-        )
-
-        st.dataframe(styled_stock, use_container_width=True, height=350)
-
-    with col4:
-        st.markdown("**📊 Análisis de Stock**")
-
-        avg_stock_quality = agents_df["stock_attractiveness"].mean()
-        avg_age = agents_df["stock_avg_age"].mean()
-        avg_match = agents_df["lead_match_score"].mean()
-
-        st.metric("Atractivo Promedio del Stock", f"{avg_stock_quality:.0f}/100")
-        st.metric("Edad Promedio del Stock", f"{avg_age:.0f} días")
-        st.metric("Match Promedio con Leads", f"{avg_match:.0f}/100")
-
-        # Agentes con stock de baja calidad
-        low_stock = agents_df[agents_df["stock_attractiveness"] < 65]
-        if len(low_stock) > 0:
-            st.warning(f"⚠️ {len(low_stock)} agente(s) con stock poco atractivo")
-            for _, agent in low_stock.head(3).iterrows():
-                st.caption(
-                    f"• {agent['agent_name']}: {agent['stock_attractiveness']:.0f}/100 (edad: {agent['stock_avg_age']:.0f}d)"
-                )
-        else:
-            st.success("✅ Todo el stock tiene buena calidad")
-
 
 def render_incentives_module(filtered_data):
     """Render unified gamification and incentives module with composite points"""
@@ -1086,29 +1030,14 @@ def render_incentives_module(filtered_data):
     # Check if new columns exist
     has_composite_points = "total_points" in agents_df.columns
 
-    # Create tabs for different views
-    tab1, tab2, tab3 = st.tabs(
-        ["📊 Ranking & Niveles", "🤝 Ownership Score", "📋 Objetivos Tradicionales"]
-    )
-
-    with tab1:
-        if has_composite_points:
-            render_composite_points_tab(agents_df)
-        else:
-            st.info("⏳ Reinicia la app para cargar las nuevas métricas de puntos")
-
-    with tab2:
-        if has_composite_points:
-            render_ownership_tab(agents_df)
-        else:
-            st.info("⏳ Reinicia la app para cargar las nuevas métricas de ownership")
-
-    with tab3:
-        render_traditional_goals_tab(agents_df)
+    if has_composite_points:
+        render_unified_incentives_view(agents_df)
+    else:
+        st.info("⏳ Reinicia la app para cargar las nuevas métricas de puntos")
 
 
-def render_composite_points_tab(agents_df):
-    """Render composite points ranking and levels"""
+def render_unified_incentives_view(agents_df):
+    """Render unified incentives view (Points + Ownership + Levels)"""
     # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
 
@@ -1117,8 +1046,8 @@ def render_composite_points_tab(agents_df):
         st.metric("Puntos Promedio", f"{avg_points:,.0f}")
 
     with col2:
-        avg_pts_delivery = agents_df["points_per_delivery"].mean()
-        st.metric("Pts/Entrega Prom.", f"{avg_pts_delivery:.0f}")
+        avg_ownership = agents_df["ownership_score"].mean()
+        st.metric("Ownership Promedio", f"{avg_ownership:.1f}%")
 
     with col3:
         diamond = len(agents_df[agents_df["incentive_level"] == "💎 Diamond"])
@@ -1131,235 +1060,179 @@ def render_composite_points_tab(agents_df):
 
     st.markdown("---")
 
-    # Leaderboard by points
+    # Layout: Leaderboard (Left) | Analysis (Right)
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
-        st.markdown("#### 📊 Ranking por Puntos Compuestos")
+        st.markdown("#### 📊 Ranking Unificado (Puntos + Ownership)")
 
-        # Sort by total points
-        leaderboard = agents_df.sort_values("total_points", ascending=False).head(10)
+        # Sort by total points (All agents)
+        leaderboard = agents_df.sort_values("total_points", ascending=False)
 
-        for idx, (_, agent) in enumerate(leaderboard.iterrows()):
-            expander_label = f"#{idx + 1} {agent['agent_name']} - {agent['incentive_level']} ({agent['total_points']:,.0f} pts)"
+        # Scrolleable container for long lists
+        with st.container(height=450, border=True):
+            for idx, (_, agent) in enumerate(leaderboard.iterrows()):
+                # Determine ownership badge
+                ownership = agent.get("ownership_score", 0)
+                own_badge = "🌟" if ownership >= 90 else "⭐" if ownership >= 80 else ""
 
-            with st.expander(expander_label, expanded=idx == 0):
-                # Use simple text layout instead of columns to avoid overlap
-                st.markdown("**📊 Desglose de Puntos:**")
-                st.text(
-                    f"Base: {agent['base_points']:,.0f} | "
-                    f"Financing: +{agent['financing_points']:,.0f} | "
-                    f"Garantía: +{agent['warranty_points']:,.0f} | "
-                    f"Seguro: +{agent['insurance_points']:,.0f} | "
-                    f"Trade-in: +{agent['tradein_points']:,.0f} | "
-                    f"NPS Bonus: +{agent['nps_bonus']:,.0f}"
+                expander_label = (
+                    f"#{idx + 1} {agent['agent_name']} {own_badge} - "
+                    f"{agent['incentive_level']} ({agent['total_points']:,.0f} pts)"
                 )
 
-                st.markdown("**📈 Penetraciones:**")
-                st.text(
-                    f"Financing: {agent['financing_penetration']:.1f}% | "
-                    f"Ancillaries: {agent['ancillary_penetration']:.1f}% | "
-                    f"Seguro: {agent['insurance_penetration']:.1f}% | "
-                    f"Garantía: {agent['extended_warranty_penetration']:.1f}% | "
-                    f"NPS: {agent['nps']:.0f}"
-                )
+                with st.expander(expander_label, expanded=idx == 0):
+                    # Breakdown columns
+                    c1, c2 = st.columns(2)
 
-                st.markdown("**🎯 Eficiencia:**")
-                st.text(
-                    f"Pts/Entrega: {agent['points_per_delivery']:.0f} | "
-                    f"Revenue/Slot: ${agent['revenue_per_slot']:,.0f} | "
-                    f"Entregas: {agent['sales']:.0f} | "
-                    f"Ownership: {agent['ownership_score']:.1f}%"
-                )
+                    with c1:
+                        st.markdown("**💰 Composición de Puntos:**")
+                        st.caption(f"Base Ventas: {agent['base_points']:,.0f}")
+                        st.caption(f"Financing: +{agent['financing_points']:,.0f}")
+                        st.caption(
+                            f"Ancillaries: +{agent['warranty_points'] + agent['insurance_points']:,.0f}"
+                        )
+
+                        # Highlight Ownership Bonus
+                        own_pts = agent.get("ownership_points", 0)
+                        if own_pts > 0:
+                            st.markdown(f"**🤝 Ownership Bonus: +{own_pts:,.0f}**")
+                        else:
+                            st.caption(f"Ownership Bonus: {own_pts:,.0f}")
+
+                        st.caption(f"NPS Bonus: +{agent['nps_bonus']:,.0f}")
+
+                    with c2:
+                        st.markdown("**📈 Métricas Clave:**")
+                        st.caption(f"Ownership Score: **{ownership:.1f}%**")
+                        st.caption(f"NPS: {agent['nps']:.0f}")
+                        st.caption(
+                            f"Financing Pen: {agent['financing_penetration']:.1f}%"
+                        )
+                        st.caption(
+                            f"Eficiencia: {agent.get('efficiency_composite', 0):.1f}"
+                        )
 
     with col_right:
-        st.markdown("#### 📋 Distribución por Nivel")
-
+        # 1. Niveles (Compacto - Grid)
+        st.markdown("#### 🏆 Niveles")
         level_counts = agents_df["incentive_level"].value_counts()
 
-        for level in ["💎 Diamond", "🥇 Gold", "🥈 Silver", "🥉 Bronze"]:
-            count = level_counts.get(level, 0)
-            pct = count / len(agents_df) * 100 if len(agents_df) > 0 else 0
-            st.markdown(f"**{level}:** {count} ({pct:.0f}%)")
+        # Dos columnas para mostrar niveles de forma compacta
+        l1, l2 = st.columns(2)
+        with l1:
+            st.metric("💎 Diamond", f"{level_counts.get('💎 Diamond', 0)}")
+            st.metric("🥇 Gold", f"{level_counts.get('🥇 Gold', 0)}")
+        with l2:
+            st.metric("🥈 Silver", f"{level_counts.get('🥈 Silver', 0)}")
+            st.metric("🥉 Bronze", f"{level_counts.get('🥉 Bronze', 0)}")
 
         st.markdown("---")
-        st.markdown("#### 💡 Cómo ganar puntos")
-        st.caption("• Base: 100 pts/entrega")
-        st.caption("• Financing: +50 pts")
-        st.caption("• Kavak Total: +30 pts")
-        st.caption("• Seguro: +20 pts")
-        st.caption("• Trade-in: +20 pts")
-        st.caption("• NPS ≥80: +25 pts")
 
-
-def render_ownership_tab(agents_df):
-    """Render ownership score analysis"""
-    # Summary metrics
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        avg_ownership = agents_df["ownership_score"].mean()
-        st.metric("Ownership Promedio", f"{avg_ownership:.1f}%")
-
-    with col2:
-        total_handoffs = agents_df["handoffs"].sum()
-        st.metric("Handoffs Totales", f"{total_handoffs:.0f}")
-
-    with col3:
-        high_ownership = len(agents_df[agents_df["ownership_score"] >= 85])
-        st.metric("Ownership ≥85%", f"{high_ownership}")
-
-    with col4:
-        low_ownership = len(agents_df[agents_df["ownership_score"] < 70])
-        st.metric("Ownership <70%", f"{low_ownership}", delta_color="inverse")
-
-    st.markdown("---")
-
-    col_left, col_right = st.columns(2)
-
-    with col_left:
-        st.markdown("#### 🌟 Top Ownership (Mayor autonomía)")
-
+        # 2. Top Ownership (Solo Top 3 y compacto)
+        st.markdown("#### 🤝 Top 3 Ownership")
         top_ownership = agents_df.sort_values("ownership_score", ascending=False).head(
-            5
+            3
         )
-
-        for _, agent in top_ownership.iterrows():
-            ownership = agent["ownership_score"]
-            if ownership >= 90:
-                emoji = "🏆"
-            elif ownership >= 80:
-                emoji = "⭐"
-            else:
-                emoji = "👍"
-
-            st.success(
-                f"{emoji} **{agent['agent_name']}** - {ownership:.1f}% "
-                f"({agent['sales']:.0f} entregas, {agent['handoffs']:.0f} handoffs)"
-            )
-
-    with col_right:
-        st.markdown("#### ⚠️ Oportunidad de Mejora")
-
-        low_ownership = agents_df.sort_values("ownership_score", ascending=True).head(5)
-
-        for _, agent in low_ownership.iterrows():
-            ownership = agent["ownership_score"]
-            handoffs = agent["handoffs"]
-
-            st.warning(
-                f"**{agent['agent_name']}** - {ownership:.1f}% "
-                f"({handoffs:.0f} handoffs)"
-            )
-            if handoffs > 3:
-                st.caption("   → Reducir traspasos mejorará ownership y experiencia")
-
-    st.markdown("---")
-    st.markdown("#### 💡 ¿Qué es Ownership Score?")
-    st.info(
-        "El **Ownership Score** mide qué porcentaje de clientes cada agente "
-        "maneja de principio a fin sin traspasos (handoffs). Un alto ownership "
-        "significa mejor experiencia del cliente y mayor responsabilidad del agente."
-    )
-
-
-def render_traditional_goals_tab(agents_df):
-    """Render traditional incentive goals"""
-    # Calculate points for each agent based on traditional goals
-    agents_df = agents_df.copy()
-    agents_df["goal_points"] = 0
-
-    for goal in INCENTIVE_GOALS:
-        metric = goal["metric"]
-        threshold = goal["threshold"]
-        points = goal["points"]
-        is_inverse = goal.get("inverse", False)
-
-        if metric in agents_df.columns:
-            if is_inverse:
-                agents_df.loc[agents_df[metric] <= threshold, "goal_points"] += points
-            else:
-                agents_df.loc[agents_df[metric] >= threshold, "goal_points"] += points
-
-    # Sort by points
-    agents_df = agents_df.sort_values("goal_points", ascending=False)
-
-    # Display goals
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        st.markdown("**🎯 Objetivos Activos:**")
-        for goal in INCENTIVE_GOALS:
+        for idx, (_, agent) in enumerate(top_ownership.iterrows()):
+            medal = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉"
             st.markdown(
-                f"• **{goal['name']}**: {goal['description']} (+{goal['points']} pts)"
+                f"**{agent['ownership_score']:.1f}%** {medal} {agent['agent_name']}"
             )
 
-    with col2:
-        st.markdown("**📊 Ranking por Objetivos:**")
+        st.markdown("---")
 
-        leaderboard = agents_df[["agent_name", "goal_points"]].head(10).copy()
-        leaderboard.columns = ["Agente", "Puntos Objetivos"]
-        leaderboard.index = range(1, len(leaderboard) + 1)
-
-        st.dataframe(leaderboard, use_container_width=True)
+        # 3. Reglas (Colapsadas)
+        with st.expander("💡 Reglas de Puntos", expanded=False):
+            st.caption("• Base: 100 pts/entrega")
+            st.caption("• Ownership: +40 pts (si >90%)")
+            st.caption("• Financing: +50 pts")
+            st.caption("• Ancillaries: +20-30 pts")
+            st.caption("• NPS: +25 pts (si >80)")
 
 
 def render_recommendations_module(filtered_data):
-    """Render automatic recommendations for agents"""
-    st.subheader("💡 Recomendaciones Automáticas")
+    """Render intelligent recommendations grouped by action"""
+    st.subheader("💡 Recomendaciones Estratégicas")
 
     agents_df = filtered_data["agent_performance"].copy()
-
     if len(agents_df) == 0:
         st.info("No hay datos de agentes")
         return
 
-    recommendations = []
+    # 1. CLASIFICACIÓN
+    assign_more = []
+    stop_assign = []
+    coaching = []
 
     for _, agent in agents_df.iterrows():
-        agent_recs = []
+        name = agent["agent_name"]
+        util = agent["utilization"]
+        eff = agent.get("efficiency_composite", 0)
+        backlog = agent.get("backlog_cartera", 0)
+        cvr = agent["conversion"] * 100
 
-        # Check utilization
-        if agent["utilization"] < 0.70:
-            agent_recs.append(
-                f"📅 Baja utilización ({agent['utilization']*100:.0f}%) - Asignar más leads para llenar {agent['available_slots']:.0f} slots disponibles"
-            )
-        elif agent["utilization"] > 0.90:
-            agent_recs.append(
-                f"✅ Alta utilización ({agent['utilization']*100:.0f}%) - Agente bien aprovechado"
-            )
+        # Logic for classification
+        if util > 0.90 or backlog > 25:
+            reason = f"Saturado ({util*100:.0f}% util, {backlog} leads)"
+            stop_assign.append({"name": name, "reason": reason, "metric": util})
 
-        # Check stock quality
-        if agent["stock_attractiveness"] < 65:
-            agent_recs.append(
-                f"🚗 Stock poco atractivo ({agent['stock_attractiveness']:.0f}/100, edad: {agent['stock_avg_age']:.0f}d) - Renovar inventario asignado"
-            )
+        elif util < 0.70 and eff > 50:
+            reason = f"Disponible y Eficiente ({util*100:.0f}% util)"
+            assign_more.append({"name": name, "reason": reason, "metric": eff})
 
-        # Check aprovechamiento
-        if agent["aprovechamiento_pct"] < 15:
-            agent_recs.append(
-                f"⚠️ Bajo aprovechamiento ({agent['aprovechamiento_pct']:.1f}%) - Capacitación en cierre o mejorar calidad de leads"
-            )
+        elif cvr < 5:
+            reason = f"Baja Conversión ({cvr:.1f}%)"
+            coaching.append({"name": name, "reason": reason, "metric": cvr})
 
-        # Check backlog
-        if agent["backlog_cartera"] > 20:
-            agent_recs.append(
-                f"📋 Alto backlog ({agent['backlog_cartera']:.0f} leads) - Priorizar seguimiento de cartera"
-            )
+    # 2. VISUALIZACIÓN EN COLUMNAS
+    c1, c2, c3 = st.columns(3)
 
-        if agent_recs:
-            recommendations.append(
-                {"agent": agent["agent_name"], "recommendations": agent_recs}
-            )
+    with c1:
+        st.markdown(
+            f"""<div style="background:#e8f5e9;padding:10px;border-radius:5px;border-left:5px solid #2e7d32">
+            <h4 style="margin:0;color:#1b5e20">🚀 Asignar ({len(assign_more)})</h4>
+            <small>Alta eficiencia, baja carga</small></div>""",
+            unsafe_allow_html=True,
+        )
+        if assign_more:
+            with st.container(height=300):
+                for a in assign_more:
+                    st.caption(f"**{a['name']}**\n{a['reason']}")
+                    val = a["metric"] / 100 if a["metric"] > 1 else a["metric"]
+                    st.progress(min(val, 1.0))
+        else:
+            st.caption("Nadie cumple criterio")
 
-    if recommendations:
-        # Show top recommendations
-        for rec in recommendations[:5]:  # Top 5 agentes con recomendaciones
-            with st.expander(f"🎯 {rec['agent']}", expanded=False):
-                for r in rec["recommendations"]:
-                    st.markdown(f"- {r}")
-    else:
-        st.success("✅ No hay recomendaciones críticas - Hub operando óptimamente")
+    with c2:
+        st.markdown(
+            f"""<div style="background:#ffebee;padding:10px;border-radius:5px;border-left:5px solid #c62828">
+            <h4 style="margin:0;color:#b71c1c">🛑 Frenar ({len(stop_assign)})</h4>
+            <small>Saturados o backlog alto</small></div>""",
+            unsafe_allow_html=True,
+        )
+        if stop_assign:
+            with st.container(height=300):
+                for a in stop_assign:
+                    st.caption(f"**{a['name']}**\n{a['reason']}")
+                    st.markdown("---")
+        else:
+            st.caption("Nadie saturado")
+
+    with c3:
+        st.markdown(
+            f"""<div style="background:#fff8e1;padding:10px;border-radius:5px;border-left:5px solid #f57f17">
+            <h4 style="margin:0;color:#f57f17">🎓 Coaching ({len(coaching)})</h4>
+            <small>Baja conversión / calidad</small></div>""",
+            unsafe_allow_html=True,
+        )
+        if coaching:
+            with st.container(height=300):
+                for a in coaching:
+                    st.caption(f"**{a['name']}**\n{a['reason']}")
+                    st.markdown("---")
+        else:
+            st.caption("Sin alertas de calidad")
 
 
 def render_operational_alerts(filtered_data, hub_label):
@@ -1414,49 +1287,36 @@ def render_operational_alerts(filtered_data, hub_label):
 
 
 def render_lead_assignment_simulator(filtered_data):
-    """Render lead assignment simulator for optimal distribution"""
-    st.subheader("🎯 Simulador de Asignación de Leads")
-    st.caption(
-        "Simula la asignación óptima de nuevos leads basada en capacidad y eficiencia"
-    )
+    """Render lead assignment simulator - IMPROVED UX"""
+    st.subheader("🎯 Simulador de Asignación")
 
     agents_df = filtered_data["agent_performance"].copy()
-
     if len(agents_df) == 0:
         st.warning("No hay datos de agentes")
         return
 
     if "capacity_for_leads" not in agents_df.columns:
-        st.info("⏳ Reinicia la app para cargar las nuevas métricas")
+        st.info("Reinicia la app para cargar métricas")
         return
 
-    # Input: How many leads to assign
-    col_input, col_method = st.columns(2)
-
-    with col_input:
-        new_leads = st.number_input(
-            "📥 Nuevos leads a asignar",
-            min_value=1,
-            max_value=100,
-            value=20,
-            step=5,
-            key="simulator_leads",
-        )
-
-    with col_method:
-        method = st.radio(
-            "Método de asignación",
-            ["🎯 Óptimo (por eficiencia)", "⚖️ Uniforme", "📊 Por capacidad"],
-            key="simulator_method",
-            horizontal=True,
-        )
-
-    st.markdown("---")
+    # CONTROL PANEL (Compact)
+    with st.container(border=True):
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            new_leads = st.number_input("📥 Leads a asignar", 1, 200, 20, 5)
+        with c2:
+            st.caption("Método de Distribución")
+            method = st.radio(
+                "Método",
+                ["🎯 Óptimo (Eficiencia)", "⚖️ Uniforme", "📊 Por Capacidad"],
+                horizontal=True,
+                label_visibility="collapsed",
+            )
 
     # Calculate assignments
     agents_df = agents_df.copy()
 
-    if method == "🎯 Óptimo (por eficiencia)":
+    if method == "🎯 Óptimo (Eficiencia)":
         # Prioritize by efficiency_composite, limited by capacity
         agents_df["priority_score"] = (
             agents_df["efficiency_composite"] * 0.6
@@ -1470,7 +1330,6 @@ def render_lead_assignment_simulator(filtered_data):
         for _, agent in agents_df.iterrows():
             if remaining_leads <= 0:
                 break
-            # Assign up to their capacity
             can_take = min(agent["capacity_for_leads"], remaining_leads)
             if can_take > 0:
                 assignments.append(
@@ -1485,10 +1344,8 @@ def render_lead_assignment_simulator(filtered_data):
                 remaining_leads -= can_take
 
     elif method == "⚖️ Uniforme":
-        # Distribute evenly
         leads_per_agent = new_leads // len(agents_df)
         remainder = new_leads % len(agents_df)
-
         assignments = []
         for idx, (_, agent) in enumerate(agents_df.iterrows()):
             leads = leads_per_agent + (1 if idx < remainder else 0)
@@ -1503,16 +1360,15 @@ def render_lead_assignment_simulator(filtered_data):
             )
 
     else:  # Por capacidad
-        # Distribute proportionally to available capacity
         total_capacity = agents_df["capacity_for_leads"].sum()
         assignments = []
-
         for _, agent in agents_df.iterrows():
-            if total_capacity > 0:
-                pct = agent["capacity_for_leads"] / total_capacity
-                leads = int(new_leads * pct)
-            else:
-                leads = 0
+            pct = (
+                agent["capacity_for_leads"] / total_capacity
+                if total_capacity > 0
+                else 0
+            )
+            leads = int(new_leads * pct)
             assignments.append(
                 {
                     "agent": agent["agent_name"],
@@ -1523,70 +1379,75 @@ def render_lead_assignment_simulator(filtered_data):
                 }
             )
 
-    # Calculate expected revenue
+    # Metrics
     assignments_df = pd.DataFrame(assignments)
-    assignments_df = assignments_df[assignments_df["leads"] > 0]
-
-    # Estimate revenue (leads * conversion * avg ticket)
-    avg_conversion = 0.15  # 15% conversion
-    avg_ticket = 22000
-
-    assignments_df["expected_revenue"] = (
-        assignments_df["leads"]
-        * avg_conversion
-        * avg_ticket
-        * (assignments_df["efficiency"] / 100)
-    )
-
-    total_expected_revenue = assignments_df["expected_revenue"].sum()
-
-    # Display results
-    col_results, col_summary = st.columns([2, 1])
-
-    with col_results:
-        st.markdown("#### 📋 Asignación Propuesta")
-
-        if len(assignments_df) > 0:
-            for _, row in assignments_df.iterrows():
-                efficiency_color = (
-                    "🟢"
-                    if row["efficiency"] > 70
-                    else "🟡"
-                    if row["efficiency"] > 50
-                    else "🔴"
-                )
-                st.markdown(
-                    f"**{row['agent']}:** +{row['leads']} leads | "
-                    f"Efic: {efficiency_color} {row['efficiency']:.0f} | "
-                    f"Revenue Est: ${row['expected_revenue']:,.0f}"
-                )
-        else:
-            st.warning("No hay agentes con capacidad disponible")
-
-    with col_summary:
-        st.markdown("#### 📈 Resumen")
-        st.metric("Leads a asignar", new_leads)
-        st.metric("Agentes involucrados", len(assignments_df))
-        st.metric("Revenue Esperado", f"${total_expected_revenue:,.0f}")
-
-        # Compare with uniform
-        if method == "🎯 Óptimo (por eficiencia)":
-            # Calculate uniform revenue for comparison
-            uniform_efficiency = agents_df["efficiency_composite"].mean()
-            uniform_revenue = (
-                new_leads * avg_conversion * avg_ticket * (uniform_efficiency / 100)
-            )
-            improvement = (
-                (total_expected_revenue - uniform_revenue) / uniform_revenue * 100
-                if uniform_revenue > 0
-                else 0
-            )
-            if improvement > 0:
-                st.success(f"📈 +{improvement:.1f}% vs distribución uniforme")
-
-    # Action button (simulated)
-    st.markdown("---")
-    if st.button("✅ Aplicar Asignación", use_container_width=True, type="primary"):
-        st.success(
-            "✅ Asignación aplicada (simulado). Los leads se distribuirán según el plan."
+    if not assignments_df.empty:
+        assignments_df = assignments_df[assignments_df["leads"] > 0]
+        avg_conversion = 0.15
+        avg_ticket = 22000
+        assignments_df["expected_revenue"] = (
+            assignments_df["leads"]
+            * avg_conversion
+            * avg_ticket
+            * (assignments_df["efficiency"] / 100)
         )
+        total_expected_revenue = assignments_df["expected_revenue"].sum()
+
+        # Calculate comparison baseline (uniform)
+        uniform_efficiency = agents_df["efficiency_composite"].mean()
+        uniform_revenue = (
+            new_leads * avg_conversion * avg_ticket * (uniform_efficiency / 100)
+        )
+        improvement = (
+            ((total_expected_revenue - uniform_revenue) / uniform_revenue * 100)
+            if uniform_revenue > 0
+            else 0
+        )
+    else:
+        total_expected_revenue = 0
+        improvement = 0
+
+    # VISUALIZATION
+    c_left, c_right = st.columns([2, 1])
+
+    with c_left:
+        st.markdown("#### 📋 Distribución Propuesta")
+        if not assignments_df.empty:
+            display_df = assignments_df[
+                ["agent", "leads", "efficiency", "expected_revenue"]
+            ].copy()
+            display_df.columns = ["Agente", "Asignar", "Eficiencia", "Revenue Est."]
+
+            st.dataframe(
+                display_df,
+                column_config={
+                    "Agente": st.column_config.TextColumn("Agente", width="medium"),
+                    "Asignar": st.column_config.NumberColumn("Asignar", format="+%d 📥"),
+                    "Eficiencia": st.column_config.ProgressColumn(
+                        "Eficiencia", format="%d/100", min_value=0, max_value=100
+                    ),
+                    "Revenue Est.": st.column_config.NumberColumn(
+                        "Revenue Est.", format="$%d"
+                    ),
+                },
+                use_container_width=True,
+                hide_index=True,
+                height=300,
+            )
+        else:
+            st.warning("No se pudo asignar leads (capacidad llena o sin agentes)")
+
+    with c_right:
+        st.markdown("#### 📊 Impacto")
+        st.metric(
+            "Total Revenue Est.",
+            f"${total_expected_revenue:,.0f}",
+            delta=f"{improvement:.1f}% vs uniforme" if improvement > 0 else None,
+        )
+
+        st.markdown("---")
+        if st.button(
+            "✅ Confirmar Asignación", type="primary", use_container_width=True
+        ):
+            st.toast(f"Asignados {new_leads} leads correctamente", icon="✅")
+            st.balloons()
