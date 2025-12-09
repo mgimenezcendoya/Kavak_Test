@@ -103,6 +103,16 @@ def render_city_manager_dashboard(data):
     else:  # Alertas
         render_alerts_section(filtered_data, hub_label)
 
+    # ═══════════════════════════════════════════════════════════════════
+    # INVENTORY RISK ACTION MODULE (Propuesta 1)
+    # ═══════════════════════════════════════════════════════════════════
+    render_inventory_risk_module(hub_label)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # LEAD RESCUE MODULE (Propuesta 2)
+    # ═══════════════════════════════════════════════════════════════════
+    render_inactive_leads_rescue_module(hub_label)
+
 
 def render_hero_zone(all_data, filtered_data, hub_label, country):
     """Render Hero Zone with main KPIs always visible"""
@@ -1408,3 +1418,162 @@ def render_lead_assignment_simulator(filtered_data):
         ):
             st.toast(f"Asignados {new_leads} leads correctamente", icon="✅")
             st.balloons()
+
+
+def render_inventory_risk_module(hub_label):
+    """
+    Render Actionable Inventory Risk Module
+    Allows CM to take action on aging stock immediately
+    """
+    # Simulate risk data (mock)
+    # In production, this would filter the real inventory dataframe
+
+    # Check if there is risk (simulate yes for demo)
+    has_risk = True
+
+    if not has_risk:
+        return
+
+    st.markdown("---")
+    st.markdown("### 🛡️ Gestión de Riesgo")
+
+    with st.expander(
+        "🚨 Stock Crítico (>90 días) - 5 Unidades detectadas", expanded=True
+    ):
+        st.info(
+            "💡 Estos autos están afectando tu rotación. Se recomienda aplicar descuento o liquidar."
+        )
+
+        # Mock data
+        data = {
+            "ID": ["K-9281", "K-1029", "K-8821", "K-3321", "K-0012"],
+            "Vehículo": [
+                "Mazda 3 2019",
+                "Kia Rio 2020",
+                "Nissan Versa 2018",
+                "VW Vento 2020",
+                "Chevrolet Aveo 2019",
+            ],
+            "Días en Patio": [124, 110, 98, 95, 92],
+            "Precio Público": [285000, 245000, 198000, 230000, 210000],
+            "Margen Actual": ["12%", "8%", "14%", "6%", "9%"],
+        }
+        df_risk = pd.DataFrame(data)
+
+        # Interactive Table
+        event = st.dataframe(
+            df_risk,
+            use_container_width=True,
+            hide_index=True,
+            selection_mode="multi-row",
+            on_select="rerun",
+            key=f"risk_table_{hub_label}",
+        )
+
+        selected_rows = event.selection.rows
+
+        # Action Bar
+        if selected_rows:
+            st.markdown("---")
+            st.markdown(f"**Acciones para {len(selected_rows)} autos seleccionados:**")
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button(
+                    "🏷️ Aplicar -3% Descuento",
+                    use_container_width=True,
+                    key="act_discount",
+                ):
+                    st.toast(
+                        f"Descuento aplicado exitosamente a {len(selected_rows)} unidades",
+                        icon="✅",
+                    )
+            with c2:
+                if st.button(
+                    "📢 Mover a Outlet", use_container_width=True, key="act_outlet"
+                ):
+                    st.toast(
+                        f"{len(selected_rows)} unidades movidas a canal Outlet",
+                        icon="📢",
+                    )
+            with c3:
+                if st.button(
+                    "🚛 Solicitar Traslado", use_container_width=True, key="act_transfer"
+                ):
+                    st.toast("Solicitud de traslado enviada a Logística", icon="🚛")
+
+
+def render_inactive_leads_rescue_module(hub_label):
+    """
+    Module to rescue inactive/lost leads without ownership conflict.
+    Allows re-assigning old opportunities to agents with capacity.
+    """
+    st.markdown("---")
+    st.markdown("### ♻️ Recuperación de Oportunidades")
+
+    with st.expander(
+        "💎 Cartera Abandonada con Potencial (3 detectados)", expanded=True
+    ):
+        st.info(
+            "Estos clientes no compraron hace >30 días. Reactívalos asignándolos a un nuevo agente."
+        )
+
+        # Mock Data for Lost Leads
+        # In prod, filter leads with status='lost' & last_interaction > 30 days
+        opportunities = [
+            {
+                "id": "L-9921",
+                "name": "Roberto Martínez",
+                "interest": "Volkswagen Jetta 2020",
+                "lost_reason": "Precio alto ($310k)",
+                "days_inactive": 45,
+                "insight": "📉 Jettas bajaron 5% esta semana (Ahora $295k)",
+                "original_agent": "Juan Pérez",
+            },
+            {
+                "id": "L-8832",
+                "name": "Ana García",
+                "interest": "Honda CR-V 2018",
+                "lost_reason": "No aprobó crédito (Buró)",
+                "days_inactive": 62,
+                "insight": "💳 Nueva financiera 'K-Access' disponible para su perfil",
+                "original_agent": "Sofía López",
+            },
+            {
+                "id": "L-7741",
+                "name": "Carlos Ruiz",
+                "interest": "Mazda 3 2021",
+                "lost_reason": "Buscaba color Rojo (No había)",
+                "days_inactive": 38,
+                "insight": "🚗 Llegaron 3 Mazda 3 Rojos al Hub ayer",
+                "original_agent": "Pedro Sánchez",
+            },
+        ]
+
+        for i, opp in enumerate(opportunities):
+            c1, c2, c3, c4 = st.columns([2, 2, 1.5, 1.5])
+
+            with c1:
+                st.markdown(f"**{opp['name']}**")
+                st.caption(f"{opp['interest']}")
+
+            with c2:
+                st.caption(f"❌ {opp['lost_reason']}")
+                st.success(f"💡 {opp['insight']}")
+
+            with c3:
+                st.caption(f"Inactivo: {opp['days_inactive']} días")
+                st.caption(f"Ex-Agente: {opp['original_agent']}")
+
+            with c4:
+                # Selector for reassignment
+                if st.button(
+                    "♻️ Reactivar", key=f"btn_reactivate_{i}", use_container_width=True
+                ):
+                    st.toast(
+                        f"Lead {opp['name']} reactivado y asignado a un Top Performer disponible",
+                        icon="🚀",
+                    )
+
+            if i < len(opportunities) - 1:
+                st.markdown("---")
